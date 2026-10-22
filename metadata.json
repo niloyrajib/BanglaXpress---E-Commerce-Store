@@ -1,0 +1,6 @@
+{
+  "name": "BanglaXpress - E-Commerce Store",
+  "description": "A modern Bangladeshi e-commerce platform with Shopify-style admin dashboard, direct dropshipping import from AliExpress, 1688, Alibaba, CJ Dropshipping, and Taobao, vendor-wise payment methods, 1-click fast express checkout, no-code visual homepage theme customizer, bKash & Nagad payments, and inventory management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
