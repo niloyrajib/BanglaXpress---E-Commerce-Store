@@ -4,19 +4,11 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently -k -s first -n web,api \"npm run dev:web\" \"npm run api\"",
-    "dev:web": "vite --port=3000 --host=0.0.0.0",
-    "api": "tsx server.ts",
+    "dev": "vite --port=3000 --host=0.0.0.0",
     "build": "vite build",
-    "build:server": "esbuild server.ts --bundle --platform=node --target=node18 --format=esm --packages=external --outfile=server.js",
-    "build:all": "npm run build && npm run build:server",
-    "start": "node server.js",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit"
-  },
-  "engines": {
-    "node": ">=18"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
@@ -40,7 +32,6 @@
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
-    "vite": "^6.2.3",
-    "concurrently": "^9.1.2"
+    "vite": "^6.2.3"
   }
 }

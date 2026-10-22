@@ -23,23 +23,41 @@ import { CollectionItem } from './ShopifyCollectionsView';
 
 interface ShopifyAddCollectionViewProps {
   products: Product[];
+  initialCollection?: CollectionItem | null;
+  isEditing?: boolean;
   onBack: () => void;
   onSave: (collection: CollectionItem) => void;
+  onDelete?: (collectionId: string) => void;
   showToast?: (message: string) => void;
 }
 
 export const ShopifyAddCollectionView: React.FC<ShopifyAddCollectionViewProps> = ({
   products,
+  initialCollection = null,
+  isEditing = false,
   onBack,
   onSave,
+  onDelete,
   showToast = (_msg: string) => {}
 }) => {
   // Collection Form State
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [imageUrl, setImageUrl] = useState('');
+  const [title, setTitle] = useState(initialCollection?.title || '');
+  const [description, setDescription] = useState(initialCollection?.conditions || '');
+  const [imageUrl, setImageUrl] = useState(initialCollection?.image || '');
   const [themeTemplate, setThemeTemplate] = useState('Default collection');
-  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>(() => {
+    if (initialCollection) {
+      const titleLower = initialCollection.title.toLowerCase();
+      const matching = products.filter((p) => {
+        return (
+          (p.category && p.category.toLowerCase().includes(titleLower)) ||
+          (p.collections && p.collections.some((c) => c.toLowerCase().includes(titleLower)))
+        );
+      });
+      return matching.map((p) => p.id);
+    }
+    return [];
+  });
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [statusFilterActive, setStatusFilterActive] = useState(true);
 
@@ -145,20 +163,22 @@ export const ShopifyAddCollectionView: React.FC<ShopifyAddCollectionViewProps> =
       return;
     }
 
-    const newCollection: CollectionItem = {
-      id: `col-${Date.now()}`,
+    const savedCollection: CollectionItem = {
+      id: initialCollection ? initialCollection.id : `col-${Date.now()}`,
       title: trimmedTitle,
-      productsCount: selectedProductIds.length,
-      conditions: conditionValue ? `${conditionField} ${conditionOperator} ${conditionValue}` : '',
+      productsCount: selectedProductIds.length || (initialCollection ? initialCollection.productsCount : 0),
+      conditions: conditionValue
+        ? `${conditionField} ${conditionOperator} ${conditionValue}`
+        : (description || initialCollection?.conditions || ''),
       image:
         imageUrl ||
         (collectionProducts[0]?.images?.[0] ||
+          initialCollection?.image ||
           'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=150&auto=format&fit=crop&q=80'),
       badgeLogoText: trimmedTitle.toUpperCase()
     };
 
-    onSave(newCollection);
-    showToast(`"${trimmedTitle}" কালেকশন সফলভাবে তৈরি হয়েছে!`);
+    onSave(savedCollection);
   };
 
   // Generated URL slug
@@ -172,34 +192,51 @@ export const ShopifyAddCollectionView: React.FC<ShopifyAddCollectionViewProps> =
     <div className="max-w-6xl mx-auto space-y-4 pb-12">
       {/* Top Bar with Breadcrumb and Actions */}
       <div className="flex items-center justify-between pt-1">
-        {/* Breadcrumb matching PDF screenshot: [Tag icon] › Add collection */}
+        {/* Breadcrumb: [Tag icon] › Add/Edit collection */}
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={onBack}
-            className="p-1 rounded-md text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors"
+            className="p-1 rounded-md text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors cursor-pointer"
             title="Back to collections"
           >
             <Tag className="w-4 h-4 text-gray-700" />
           </button>
           <span className="text-gray-400 text-sm font-light">›</span>
-          <h1 className="text-lg font-bold text-[#202223] tracking-tight">Add collection</h1>
+          <h1 className="text-lg font-bold text-[#202223] tracking-tight">
+            {isEditing ? `Edit collection: ${initialCollection?.title}` : 'Add collection'}
+          </h1>
         </div>
 
         <div className="flex items-center gap-2">
+          {isEditing && onDelete && initialCollection && (
+            <button
+              type="button"
+              onClick={() => {
+                if (confirm(`Are you sure you want to delete collection "${initialCollection.title}"?`)) {
+                  onDelete(initialCollection.id);
+                }
+              }}
+              className="px-3 py-1.5 border border-rose-200 text-rose-600 hover:bg-rose-50 text-xs font-semibold rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Delete</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={onBack}
-            className="px-3.5 py-1.5 border border-[#c9cccf] hover:bg-[#f6f6f7] text-[#202223] text-xs font-semibold rounded-lg transition-colors"
+            className="px-3.5 py-1.5 border border-[#c9cccf] hover:bg-[#f6f6f7] text-[#202223] text-xs font-semibold rounded-lg transition-colors cursor-pointer"
           >
             Discard
           </button>
           <button
             type="button"
             onClick={handleSave}
-            className="px-4 py-1.5 bg-[#303030] hover:bg-[#202020] text-white text-xs font-semibold rounded-lg shadow-xs transition-colors"
+            className="px-4 py-1.5 bg-[#303030] hover:bg-[#202020] text-white text-xs font-semibold rounded-lg shadow-xs transition-colors cursor-pointer"
           >
-            Save
+            {isEditing ? 'Save changes' : 'Save'}
           </button>
         </div>
       </div>
@@ -256,8 +293,20 @@ export const ShopifyAddCollectionView: React.FC<ShopifyAddCollectionViewProps> =
                     <div className="w-8 h-8 rounded-full flex items-center justify-center text-gray-700 group-hover:text-black">
                       <ArrowUp className="w-5 h-5 stroke-[2.2]" />
                     </div>
+                    <span className="text-[11px] text-gray-500 mt-1">Upload image</span>
                   </div>
                 )}
+
+                {/* Optional direct Image URL input */}
+                <div className="mt-2">
+                  <input
+                    type="url"
+                    value={imageUrl}
+                    onChange={(e) => setImageUrl(e.target.value)}
+                    placeholder="বা Image URL পেস্ট করুন..."
+                    className="w-full text-[11px] px-2 py-1 rounded border border-gray-200 focus:border-gray-400 outline-hidden text-gray-700 bg-gray-50/50"
+                  />
+                </div>
               </div>
 
               {/* Title & Description Fields */}

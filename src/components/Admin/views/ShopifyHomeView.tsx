@@ -22,13 +22,15 @@ interface ShopifyHomeViewProps {
   products: Product[];
   onNavigate: (tab: ShopifyNavTab) => void;
   onOpenNewProduct: () => void;
+  onSelectOrder?: (orderId: string) => void;
 }
 
 export const ShopifyHomeView: React.FC<ShopifyHomeViewProps> = ({
   orders,
   products,
   onNavigate,
-  onOpenNewProduct
+  onOpenNewProduct,
+  onSelectOrder
 }) => {
   const totalRevenue = orders.reduce((acc, o) => acc + o.total, 0);
   const pendingOrders = orders.filter((o) => o.status === 'pending');
@@ -243,6 +245,25 @@ export const ShopifyHomeView: React.FC<ShopifyHomeViewProps> = ({
               </button>
             </div>
 
+            <div className="flex items-center justify-between p-3 rounded-lg bg-amber-50/60 border border-amber-200">
+              <div className="flex items-center gap-3">
+                <div className="w-4 h-4 rounded-full border-2 border-amber-600 flex items-center justify-center shrink-0">
+                  <div className="w-1.5 h-1.5 rounded-full bg-amber-600" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-amber-950">Recover abandoned checkouts</p>
+                  <p className="text-[11px] text-amber-700">Re-engage shoppers who left cart with template emails</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => onNavigate('abandoned_checkouts')}
+                className="px-2.5 py-1 bg-amber-700 text-white rounded text-xs font-semibold hover:bg-amber-800"
+              >
+                View Leads
+              </button>
+            </div>
+
             <div className="flex items-center justify-between p-3 rounded-lg bg-emerald-50/50 border border-emerald-200">
               <div className="flex items-center gap-3">
                 <div className="w-4 h-4 rounded-full border-2 border-emerald-600 flex items-center justify-center shrink-0">
@@ -294,6 +315,58 @@ export const ShopifyHomeView: React.FC<ShopifyHomeViewProps> = ({
             >
               Manage all inventory →
             </button>
+          </div>
+
+          {/* Recent Orders with Clickable IDs */}
+          <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider text-[11px]">
+                Recent Orders
+              </h3>
+              <button
+                type="button"
+                onClick={() => onNavigate('orders')}
+                className="text-[11px] text-blue-600 hover:underline font-semibold"
+              >
+                View all ({orders.length})
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {orders.slice(0, 4).map((ord) => (
+                <div
+                  key={ord.id}
+                  className="flex items-center justify-between text-xs py-1.5 border-b border-gray-100 last:border-0 hover:bg-gray-50/60 rounded-md px-1 transition-colors"
+                >
+                  <div className="truncate pr-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (onSelectOrder) onSelectOrder(ord.id);
+                        onNavigate('orders');
+                      }}
+                      className="font-bold font-mono text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <span>{ord.id.startsWith('#') ? ord.id : `#${ord.id}`}</span>
+                      <ExternalLink className="w-2.5 h-2.5 text-blue-500" />
+                    </button>
+                    <span className="text-[10.5px] text-gray-500 truncate block">
+                      {ord.customerName} • ৳{ord.total.toLocaleString()}
+                    </span>
+                  </div>
+
+                  <span
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold capitalize shrink-0 ${
+                      ord.status === 'delivered' || ord.status === 'shipped'
+                        ? 'bg-emerald-50 text-emerald-700'
+                        : 'bg-amber-50 text-amber-800'
+                    }`}
+                  >
+                    {ord.status}
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs space-y-2.5">

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { X, Trash2, ShoppingBag, ArrowRight, Tag, ShieldCheck, Truck } from 'lucide-react';
 import { CartItem, Coupon } from '../types';
 import { STORE_SETTINGS, VALID_COUPONS } from '../data/mockData';
+import { TRANSLATIONS, getProductTitle } from '../utils/translations';
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -12,6 +13,8 @@ interface CartDrawerProps {
   onProceedToCheckout: () => void;
   appliedCoupon: Coupon | null;
   onApplyCoupon: (coupon: Coupon | null) => void;
+  coupons?: Coupon[];
+  lang?: 'en' | 'bn';
 }
 
 export const CartDrawer: React.FC<CartDrawerProps> = ({
@@ -22,8 +25,11 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   onRemoveItem,
   onProceedToCheckout,
   appliedCoupon,
-  onApplyCoupon
+  onApplyCoupon,
+  coupons = VALID_COUPONS,
+  lang = 'bn'
 }) => {
+  const t = TRANSLATIONS[lang];
   const [couponInput, setCouponInput] = useState('');
   const [couponError, setCouponError] = useState('');
   const [couponSuccess, setCouponSuccess] = useState('');
@@ -51,19 +57,34 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     setCouponError('');
     setCouponSuccess('');
 
-    const matched = VALID_COUPONS.find(c => c.code.toUpperCase() === couponInput.trim().toUpperCase());
+    const searchList = coupons && coupons.length > 0 ? coupons : VALID_COUPONS;
+    const matched = searchList.find(c => c.code.toUpperCase() === couponInput.trim().toUpperCase());
     if (!matched) {
-      setCouponError('অবৈধ কুপন কোড (Invalid coupon code)');
+      setCouponError(lang === 'en' ? 'Invalid coupon code' : 'অবৈধ কুপন কোড (Invalid coupon code)');
+      return;
+    }
+
+    const todayIso = new Date().toISOString().split('T')[0];
+    if (matched.status === 'expired' || (matched.expiryDate && matched.expiryDate < todayIso)) {
+      setCouponError(lang === 'en' ? `Coupon '${matched.code}' has expired` : `কুপন '${matched.code}' এর মেয়াদ উত্তীর্ণ হয়ে গেছে (Coupon has expired)`);
       return;
     }
 
     if (subtotal < matched.minSpend) {
-      setCouponError(`এই কুপনটি ব্যবহার করতে ন্যূনতম ৳${matched.minSpend.toLocaleString()} টাকার অর্ডার প্রয়োজন`);
+      setCouponError(
+        lang === 'en'
+          ? `Minimum order of ৳${matched.minSpend.toLocaleString()} required for this coupon`
+          : `এই কুপনটি ব্যবহার করতে ন্যূনতম ৳${matched.minSpend.toLocaleString()} টাকার অর্ডার প্রয়োজন`
+      );
       return;
     }
 
     onApplyCoupon(matched);
-    setCouponSuccess(`কুপন '${matched.code}' সফলভাবে প্রয়োগ করা হয়েছে!`);
+    setCouponSuccess(
+      lang === 'en'
+        ? `Coupon '${matched.code}' applied successfully!`
+        : `কুপন '${matched.code}' সফলভাবে প্রয়োগ করা হয়েছে!`
+    );
     setCouponInput('');
   };
 
@@ -78,12 +99,12 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
           <div className="flex items-center gap-2">
             <ShoppingBag className="w-5 h-5 text-rose-400" />
             <h2 className="text-sm font-bold tracking-wide">
-              শপিং কার্ট ({cartItems.length} টি আইটেম)
+              {t.yourCart} ({cartItems.length} {t.itemsInCart})
             </h2>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-full hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+            className="p-1.5 rounded-full hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -95,8 +116,10 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
             <span className="font-semibold text-rose-900 flex items-center gap-1">
               <Truck className="w-3.5 h-3.5 text-rose-600" />
               {freeShippingNeeded === 0
-                ? 'অভিনন্দন! আপনি পাচ্ছেন ফ্রি হোম ডেলিভারি!'
-                : `আর মাত্র ৳${freeShippingNeeded.toLocaleString()} টাকার শপিং করলেই ফ্রি ডেলিভারি!`}
+                ? (lang === 'en' ? 'Congratulations! You unlocked FREE Delivery!' : 'অভিনন্দন! আপনি পাচ্ছেন ফ্রি হোম ডেলিভারি!')
+                : (lang === 'en'
+                    ? `Add ৳${freeShippingNeeded.toLocaleString()} more for FREE delivery!`
+                    : `আর মাত্র ৳${freeShippingNeeded.toLocaleString()} টাকার শপিং করলেই ফ্রি ডেলিভারি!`)}
             </span>
             <span className="font-bold text-rose-600 font-mono">{freeShippingProgress}%</span>
           </div>
@@ -115,15 +138,15 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
               <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center text-gray-400 mb-3">
                 <ShoppingBag className="w-8 h-8" />
               </div>
-              <p className="text-base font-bold text-gray-800">আপনার কার্ট খালি রয়েছে</p>
+              <p className="text-base font-bold text-gray-800">{t.emptyCart}</p>
               <p className="text-xs text-gray-500 mt-1 max-w-xs">
-                আমাদের দারুণ সব গ্যাজেট ও লাইফস্টাইল পণ্য দেখতে শপিং শুরু করুন!
+                {t.emptyCartSub}
               </p>
               <button
                 onClick={onClose}
-                className="mt-4 px-5 py-2.5 rounded-xl bg-rose-600 text-white text-xs font-bold shadow-md hover:bg-rose-700 transition-colors"
+                className="mt-4 px-5 py-2.5 rounded-xl bg-rose-600 text-white text-xs font-bold shadow-md hover:bg-rose-700 transition-colors cursor-pointer"
               >
-                শপিং চালিয়ে যান
+                {t.startShopping}
               </button>
             </div>
           ) : (
@@ -136,11 +159,12 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 />
                 <div className="flex-1 min-w-0">
                   <h4 className="text-xs font-bold text-gray-900 truncate">
-                    {item.product.name}
+                    {getProductTitle(item.product, lang)}
                   </h4>
                   {item.selectedColor && (
                     <p className="text-[11px] text-gray-500">
-                      কালার: <span className="font-medium text-gray-700">{item.selectedColor}</span>
+                      {lang === 'en' ? 'Color: ' : 'কালার: '}
+                      <span className="font-medium text-gray-700">{item.selectedColor}</span>
                     </p>
                   )}
                   <div className="flex items-center justify-between mt-1.5">
@@ -192,13 +216,13 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                 <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 px-3 py-2 rounded-xl text-xs">
                   <div className="flex items-center gap-1.5 text-emerald-800">
                     <Tag className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>কুপন কোড: <strong>{appliedCoupon.code}</strong> (-৳{discountAmount})</span>
+                    <span>{lang === 'en' ? 'Coupon: ' : 'কুপন কোড: '}<strong>{appliedCoupon.code}</strong> (-৳{discountAmount})</span>
                   </div>
                   <button
                     onClick={() => onApplyCoupon(null)}
                     className="text-rose-600 hover:text-rose-800 font-bold"
                   >
-                    মুছুন
+                    {lang === 'en' ? 'Remove' : 'মুছুন'}
                   </button>
                 </div>
               ) : (
@@ -207,14 +231,14 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                     type="text"
                     value={couponInput}
                     onChange={(e) => setCouponInput(e.target.value)}
-                    placeholder="কুপন কোড (যেমন: BANGLA10)"
+                    placeholder={lang === 'en' ? 'Coupon code (e.g. BANGLA10)' : 'কুপন কোড (যেমন: BANGLA10)'}
                     className="flex-1 px-3 py-1.5 text-xs uppercase bg-white border border-gray-300 rounded-lg outline-none focus:border-rose-500"
                   />
                   <button
                     type="submit"
-                    className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold"
+                    className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold cursor-pointer"
                   >
-                    প্রয়োগ
+                    {lang === 'en' ? 'Apply' : 'প্রয়োগ'}
                   </button>
                 </form>
               )}
@@ -225,21 +249,21 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
             {/* Price Calculations */}
             <div className="space-y-1.5 text-xs text-gray-600 border-t border-gray-200 pt-2">
               <div className="flex justify-between">
-                <span>সাবটোটাল</span>
+                <span>{t.subtotal}</span>
                 <span className="font-semibold text-gray-900">৳{subtotal.toLocaleString()}</span>
               </div>
               {discountAmount > 0 && (
                 <div className="flex justify-between text-emerald-600 font-semibold">
-                  <span>কুপন ডিসকাউন্ট</span>
+                  <span>{lang === 'en' ? 'Coupon Discount' : 'কুপন ডিসকাউন্ট'}</span>
                   <span>-৳{discountAmount.toLocaleString()}</span>
                 </div>
               )}
               <div className="flex justify-between text-gray-500 text-[11px]">
-                <span>ডেলিভারি চার্জ</span>
-                <span>চেকআউট পেজে হিসাব হবে</span>
+                <span>{t.estimatedDelivery}</span>
+                <span>{lang === 'en' ? 'Calculated at checkout' : 'চেকআউট পেজে হিসাব হবে'}</span>
               </div>
               <div className="flex justify-between text-sm font-black text-gray-900 pt-1 border-t border-gray-200">
-                <span>মোট প্রদেয় (আনুমানিক)</span>
+                <span>{t.total}</span>
                 <span className="text-rose-600">৳{(subtotal - discountAmount).toLocaleString()}</span>
               </div>
             </div>
@@ -253,13 +277,15 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
               }}
               className="w-full py-3 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-rose-600/30 transition-all cursor-pointer"
             >
-              <span>অর্ডার সম্পন্ন করতে এগিয়ে যান</span>
+              <span>{t.proceedToCheckout}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
 
             <p className="text-[10px] text-center text-gray-400 flex items-center justify-center gap-1">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-              ১০০% নিরাপদ চেকআউট • ক্যাশ অন ডেলিভারি সুবিধা
+              {lang === 'en'
+                ? '100% Secure Checkout • Cash on Delivery Available'
+                : '১০০% নিরাপদ চেকআউট • ক্যাশ অন ডেলিভারি সুবিধা'}
             </p>
 
           </div>

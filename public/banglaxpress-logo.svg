@@ -1,0 +1,41 @@
+<svg viewBox="0 0 400 320" width="400" height="320" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Shopping Bag Handle -->
+  <path d="M 175 45 C 175 16, 225 16, 225 45" stroke="#006838" stroke-width="12" stroke-linecap="round" fill="none" />
+
+  <!-- Speed Lines on Left -->
+  <rect x="135" y="55" width="45" height="9" rx="4.5" fill="#006838" />
+  <rect x="120" y="75" width="55" height="9" rx="4.5" fill="#006838" />
+  <rect x="90" y="100" width="80" height="9" rx="4.5" fill="#e30613" />
+  <circle cx="80" cy="104.5" r="5" fill="#e30613" />
+  <rect x="115" y="125" width="55" height="9" rx="4.5" fill="#006838" />
+  <rect x="105" y="150" width="65" height="9" rx="4.5" fill="#e30613" />
+
+  <!-- Main Shopping Bag Body -->
+  <path d="M 170 45 L 230 45 L 244 185 L 156 185 Z" fill="#006838" rx="4" />
+
+  <!-- Stylized B Emblem -->
+  <path d="M 145 65 C 190 65 220 65 224 80 C 226 88 220 98 206 104 C 224 110 232 124 228 140 C 224 156 204 164 172 164 L 160 185 L 192 185 C 200 185 208 181 212 175 L 164 175 L 172 122 L 192 122 C 206 122 214 118 216 110 C 218 102 210 98 198 98 L 162 98 L 145 65 Z" fill="#ffffff" />
+  <path d="M 180 80 L 196 80 C 204 80 208 84 206 88 C 204 92 200 94 192 94 L 176 94 Z" fill="#006838" />
+  <path d="M 176 112 L 200 112 C 208 112 212 118 210 124 C 208 130 202 134 192 134 L 172 134 Z" fill="#006838" />
+
+  <!-- Red X Accent on Bag -->
+  <path d="M 200 134 L 242 185 L 222 185 L 188 144 Z" fill="#e30613" />
+  <path d="M 206 134 L 238 90 L 220 90 L 194 126 Z" fill="#e30613" />
+
+  <!-- Text BANGLAXPRESS -->
+  <text x="35" y="240" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="44" fill="#006838" letter-spacing="-1">BANGLA</text>
+  <text x="215" y="240" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="44" font-style="italic" fill="#e30613" letter-spacing="-0.5">XPRESS</text>
+
+  <!-- Tagline Divider Lines & Text -->
+  <rect x="40" y="260" width="60" height="3" rx="1.5" fill="#006838" />
+  <text x="110" y="264" font-family="system-ui, -apple-system, sans-serif" font-weight="700" font-size="14" fill="#1e293b" letter-spacing="2">SHOP MORE, LIVE BETTER</text>
+  <rect x="300" y="260" width="60" height="3" rx="1.5" fill="#e30613" />
+
+  <!-- Website Pill -->
+  <rect x="135" y="280" width="130" height="26" rx="13" fill="#005a30" />
+  <circle cx="150" cy="293" r="8" fill="#ffffff" fill-opacity="0.2" />
+  <path d="M 146 290 L 147 290 L 149 295 L 155 295 L 156 291 L 148 291" stroke="#ffffff" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+  <circle cx="150" cy="296.5" r="0.8" fill="#ffffff" />
+  <circle cx="154" cy="296.5" r="0.8" fill="#ffffff" />
+  <text x="163" y="297" font-family="system-ui, -apple-system, sans-serif" font-weight="700" font-size="10.5" fill="#ffffff">banglaxpress.store</text>
+</svg>

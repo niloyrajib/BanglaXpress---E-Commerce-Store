@@ -18,10 +18,12 @@ import {
   Sparkles,
   Layers,
   HelpCircle,
-  Info
+  Info,
+  Image as ImageIcon
 } from 'lucide-react';
 import { ThemeConfig } from '../../../types';
 import { STORE_SETTINGS } from '../../../data/mockData';
+import { BanglaXpressLogo } from '../../BanglaXpressLogo';
 
 interface FooterSettingsEditorProps {
   footerConfig: ThemeConfig['footer'];
@@ -59,6 +61,8 @@ export const FooterSettingsEditor: React.FC<FooterSettingsEditorProps> = ({
   const [newLegalUrl, setNewLegalUrl] = useState('#');
 
   // Data helpers
+  const logoUrl = footerConfig.logoUrl || '';
+  const logoStyle = footerConfig.logoStyle || 'badge';
   const brandName = footerConfig.brandName !== undefined ? footerConfig.brandName : 'BanglaXpress';
   const brandSuffix = footerConfig.brandSuffix !== undefined ? footerConfig.brandSuffix : '.store';
   const helpline = footerConfig.helpline || STORE_SETTINGS.phone;
@@ -274,6 +278,81 @@ export const FooterSettingsEditor: React.FC<FooterSettingsEditorProps> = ({
           <div className="flex items-center gap-2 pb-2 border-b border-gray-100 text-xs font-bold text-gray-800">
             <span className="w-5 h-5 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center text-[10px]">১</span>
             <span>কলাম ১: ব্র্যান্ড তথ্য ও যোগাযোগ নম্বর</span>
+          </div>
+
+          {/* ফুটার লোগো সেটিংস (Footer Logo Settings) */}
+          <div className="p-3.5 bg-gray-50 border border-gray-200 rounded-xl space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-[11px] font-bold text-gray-800 flex items-center gap-1.5">
+                <ImageIcon className="w-3.5 h-3.5 text-rose-500" />
+                <span>ফুটার লোগো (Footer Brand Logo)</span>
+              </label>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => onUpdateFooter({ logoStyle: 'badge' })}
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded border transition-colors cursor-pointer ${
+                    logoStyle === 'badge'
+                      ? 'bg-emerald-50 border-emerald-500 text-emerald-700'
+                      : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  White Badge Card
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onUpdateFooter({ logoStyle: 'transparent' })}
+                  className={`text-[10px] font-bold px-2 py-0.5 rounded border transition-colors cursor-pointer ${
+                    logoStyle === 'transparent'
+                      ? 'bg-emerald-50 border-emerald-500 text-emerald-700'
+                      : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  Dark Transparent
+                </button>
+              </div>
+            </div>
+
+            {/* Live Preview Box */}
+            <div className="p-3 bg-slate-900 rounded-lg flex items-center justify-between border border-slate-800">
+              <span className="text-[10px] text-slate-400 font-mono">ফুটার লাইভ প্রিভিউ:</span>
+              <div className="inline-flex items-center">
+                {logoUrl ? (
+                  <img src={logoUrl} alt="Footer Logo Preview" className="h-8 max-w-[180px] object-contain" />
+                ) : logoStyle === 'transparent' ? (
+                  <BanglaXpressLogo variant="horizontal" theme="dark" showTagline={true} />
+                ) : (
+                  <div className="bg-white px-3 py-1.5 rounded-lg shadow-xs">
+                    <BanglaXpressLogo variant="horizontal" size="sm" showTagline={true} />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Input URL */}
+            <div>
+              <label className="text-[10px] text-gray-500 block mb-1">
+                কাস্টম লোগো ইমেজ URL (খালি রাখলে অফিশিয়াল BanglaXpress লোগো সরাসরি প্রদর্শিত হবে)
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={logoUrl}
+                  onChange={(e) => onUpdateFooter({ logoUrl: e.target.value })}
+                  placeholder="https://example.com/logo.png"
+                  className="flex-1 px-2.5 py-1.5 border border-gray-300 rounded-lg text-xs outline-none focus:border-emerald-600"
+                />
+                {logoUrl && (
+                  <button
+                    type="button"
+                    onClick={() => onUpdateFooter({ logoUrl: '' })}
+                    className="px-2 py-1 text-xs text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-lg font-semibold cursor-pointer"
+                  >
+                    রিসেট
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

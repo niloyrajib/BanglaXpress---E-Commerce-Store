@@ -215,12 +215,10 @@ export function detectPlatformFromUrl(url: string): DropshipPlatform | null {
 export function calculateDropshipPricing(
   sourcePrice: number,
   currency: 'USD' | 'CNY',
-  rule: DropshipPricingRule = DEFAULT_PRICING_RULE,
-  shippingOverrideBDT?: number
+  rule: DropshipPricingRule = DEFAULT_PRICING_RULE
 ) {
   const rate = currency === 'USD' ? rule.usdRate : rule.cnyRate;
-  const shippingBDT = shippingOverrideBDT ?? rule.shippingAllowanceBDT;
-  const landedCostBDT = Math.round(sourcePrice * rate + shippingBDT);
+  const landedCostBDT = Math.round(sourcePrice * rate + rule.shippingAllowanceBDT);
   const rawPrice = landedCostBDT * rule.markupMultiplier + rule.fixedMarkupBDT;
   
   // Round to friendly price (e.g. nearest 50 or 90)
@@ -818,37 +816,173 @@ export function parseDropshipUrl(
     estimatedSourcePrice = 35.0; // default for CNY platforms
   }
 
-  // Keyword extraction for realistic titles and categories
+  // Keyword extraction for realistic titles, rich multi-angle gallery, and categories
+  let galleryImages: string[] = [];
+  let categoryFeaturesList: string[] = [];
+  let detailedSpecs: Record<string, string> = {};
+  let variantColorsList: { name: string; hex: string }[] = [];
+  let weightInGrams = 280;
+
   if (urlLower.includes('watch') || urlLower.includes('smartwatch')) {
     category = 'Smart Watches';
     title = `${platformConfig.name} Ultra HD AMOLED Bluetooth Calling Smart Watch`;
-    banglaTitle = 'আল্ট্রা এইচডি অ্যামোলেড ব্লুটুথ কলিং স্মার্ট ওয়াচ';
+    banglaTitle = 'আল্ট্রা এইচডি অ্যামোলেড ব্লুটুথ কলিং স্মার্ট ওয়াচ (ফুল ডিসপ্লে)';
     sampleImage = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800';
+    galleryImages = [
+      'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=800',
+      'https://images.unsplash.com/photo-1508685096489-7aacd43bd3b1?w=800',
+      'https://images.unsplash.com/photo-1546868871-7041f2a55e12?w=800',
+      'https://images.unsplash.com/photo-1579586337278-3befd40fd17a?w=800'
+    ];
     estimatedSourcePrice = currency === 'USD' ? 9.8 : 42.0;
+    weightInGrams = 85;
+    categoryFeaturesList = [
+      '2.02" High-Resolution AMOLED Bezel-Less Touchscreen',
+      'Bluetooth 5.3 Clear HD Calling with Speaker & Noise Reduction Mic',
+      'Real-Time Heart Rate, Blood Oxygen (SpO2) & Sleep Architecture Monitor',
+      'IP68 Certified Dust & Water Resistant Armor Body',
+      'Wireless Magnetic Fast Charger with 5-7 Days Battery Life'
+    ];
+    detailedSpecs = {
+      'Display Size': '2.02 inch AMOLED (410 x 494 Resolution)',
+      'Case Material': 'Aerospace Titanium Alloy + Sapphire Glass',
+      'Battery Capacity': '380mAh (Magnetic Fast Wireless Charging)',
+      'Waterproof Level': 'IP68 Professional Waterproof',
+      'Connectivity': 'Bluetooth 5.3 + NFC Access Control',
+      'Compatibility': 'Android 6.0+ & iOS 11.0+'
+    };
+    variantColorsList = [
+      { name: 'Titanium Silver', hex: '#cbd5e1' },
+      { name: 'Midnight Black', hex: '#0f172a' },
+      { name: 'Ocean Orange', hex: '#ea580c' }
+    ];
   } else if (urlLower.includes('earbud') || urlLower.includes('headphone') || urlLower.includes('tws') || urlLower.includes('audio')) {
     category = 'Earbuds & Audio';
     title = `${platformConfig.name} Hi-Fi Stereo Bass Wireless Noise-Cancelling Earbuds`;
-    banglaTitle = 'হাই-ফাই স্টেরিও ডিপ বাস নয়েজ ক্যান্সেলিং ওয়্যারলেস ইয়ারবাডস';
+    banglaTitle = 'হাই-ফাই স্টেরিও ডিপ বাস অ্যাক্টিভ নয়েজ ক্যান্সেলিং ওয়্যারলেস ইয়ারবাডস';
     sampleImage = 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=800';
+    galleryImages = [
+      'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=800',
+      'https://images.unsplash.com/photo-1572569511254-d8f925fe2cbb?w=800',
+      'https://images.unsplash.com/photo-1606220588913-b3aacb4d2f46?w=800',
+      'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=800'
+    ];
     estimatedSourcePrice = currency === 'USD' ? 5.6 : 28.0;
+    weightInGrams = 52;
+    categoryFeaturesList = [
+      'Active Noise Cancellation (ANC) up to -35dB Depth',
+      '13mm Titanium Diaphragm Drivers with Deep Punchy Bass',
+      'Quad ENC Mics for Crystal Clear Voice Calls in Traffic',
+      '38 Hours Total Playback with Fast Type-C Charging Case',
+      'Ultra Low 45ms Latency Gaming Mode'
+    ];
+    detailedSpecs = {
+      'Bluetooth Version': 'v5.3 Ultra Stable Low Energy',
+      'Speaker Driver': '13mm Bio-Diaphragm Dynamic Unit',
+      'Earbud Battery': '40mAh (7 hours music)',
+      'Case Battery': '400mAh (38 hours total)',
+      'Water Resistance': 'IPX5 Sweat & Splash Proof',
+      'Charging Port': 'USB Type-C Fast Charge (10 mins = 2 hrs)'
+    };
+    variantColorsList = [
+      { name: 'Glossy White', hex: '#f8fafc' },
+      { name: 'Phantom Black', hex: '#0f172a' },
+      { name: 'Sky Blue', hex: '#38bdf8' }
+    ];
   } else if (urlLower.includes('power') || urlLower.includes('charger') || urlLower.includes('battery') || urlLower.includes('cable') || urlLower.includes('gan')) {
     category = 'Power & Charging';
     title = `${platformConfig.name} GaN Super Fast Charger Multi-Port Power Delivery`;
-    banglaTitle = 'জিএএন সুপার ফাস্ট চার্জার মাল্টি-পোর্ট পাওয়ার ডেলিভারি';
+    banglaTitle = 'জিএএন সুপার ফাস্ট চার্জার মাল্টি-পোর্ট পাওয়ার ডেলিভারি ও প্রটেকশন';
     sampleImage = 'https://images.unsplash.com/photo-1609592424368-23f261905ea5?w=800';
+    galleryImages = [
+      'https://images.unsplash.com/photo-1609592424368-23f261905ea5?w=800',
+      'https://images.unsplash.com/photo-1583863788434-e58a36330cf0?w=800',
+      'https://images.unsplash.com/photo-1527443224154-c4a3942d3acf?w=800',
+      'https://images.unsplash.com/photo-1544244015-0df4b3ffc6b0?w=800'
+    ];
     estimatedSourcePrice = currency === 'USD' ? 7.4 : 32.0;
+    weightInGrams = 180;
+    categoryFeaturesList = [
+      'Next-Gen GaN III Technology: 40% Smaller & Runs Cooler',
+      '65W High-Power PD Output charges Laptops & Phones Fast',
+      'Triple Port Simultaneous Fast Charging (2x Type-C + 1x USB-A)',
+      'Intelligent Temperature & Over-Voltage Protection Circuit',
+      'Foldable Travel Prongs with Universal 100-240V Input'
+    ];
+    detailedSpecs = {
+      'Maximum Output': '65W Power Delivery 3.0 & QC 4+',
+      'Ports': '2x USB-C + 1x USB-A',
+      'Input Voltage': 'AC 100-240V, 50/60Hz, 1.5A Max',
+      'Safety Certification': 'CE, FCC, RoHS Certified',
+      'Material': 'Fireproof V0 PC Shell'
+    };
+    variantColorsList = [
+      { name: 'Matte Black', hex: '#0f172a' },
+      { name: 'Pure White', hex: '#f8fafc' }
+    ];
   } else if (urlLower.includes('keyboard') || urlLower.includes('mouse') || urlLower.includes('stand') || urlLower.includes('gaming') || urlLower.includes('fan')) {
     category = 'Computer & Gaming';
     title = `${platformConfig.name} Ergonomic RGB Pro Gaming & Productivity Accessory`;
     banglaTitle = 'এরগনোমিক আরজিবি প্রো গেমিং ও প্রোডাক্টিভিটি এক্সেসরি';
     sampleImage = 'https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=800';
+    galleryImages = [
+      'https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=800',
+      'https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?w=800',
+      'https://images.unsplash.com/photo-1612815154858-60aa4c59eaa6?w=800',
+      'https://images.unsplash.com/photo-1550009158-9ebf69173e03?w=800'
+    ];
     estimatedSourcePrice = currency === 'USD' ? 12.0 : 45.0;
-  } else if (urlLower.includes('blender') || urlLower.includes('humidifier') || urlLower.includes('lamp') || urlLower.includes('kitchen') || urlLower.includes('home')) {
+    weightInGrams = 420;
+    categoryFeaturesList = [
+      'Heavy-Duty CNC Machined Aviation Aluminum Alloy Construction',
+      'Multi-Angle Ergonomic Adjustment for Posture Relief',
+      'Vibrant Custom RGB Backlighting with Multiple Dynamic Modes',
+      'Anti-Slip Silicone Cushioning Prevents Scratches & Wobble',
+      'Universal Compatibility with Mac, Windows, Tablets & Laptops'
+    ];
+    detailedSpecs = {
+      'Material': 'Aviation-Grade CNC Anodized Aluminum Alloy',
+      'Weight Capacity': 'Holds up to 10kg without sagging',
+      'Lighting Modes': '14 Dynamic RGB Spectrum Effects',
+      'Compatibility': '10" to 17.3" Laptops & Tablets',
+      'Folded Dimensions': '260 x 50 x 20 mm'
+    };
+    variantColorsList = [
+      { name: 'Space Gray', hex: '#475569' },
+      { name: 'Silver Matte', hex: '#cbd5e1' }
+    ];
+  } else {
     category = 'Home & Kitchen';
     title = `${platformConfig.name} Modern Aesthetic Smart Home & Kitchen Device`;
-    banglaTitle = 'মডার্ন এসথেটিক স্মার্ট হোম ও কিচেন ডিভাইস';
+    banglaTitle = 'মডার্ন এসথেটিক স্মার্ট হোম ও কিচেন ডিভাইস (প্রিমিয়াম কোয়ালিটি)';
     sampleImage = 'https://images.unsplash.com/photo-1570222094114-d054a817e56b?w=800';
+    galleryImages = [
+      'https://images.unsplash.com/photo-1570222094114-d054a817e56b?w=800',
+      'https://images.unsplash.com/photo-1585771724684-38269d6639fd?w=800',
+      'https://images.unsplash.com/photo-1589365278144-c9e705f843ba?w=800',
+      'https://images.unsplash.com/photo-1540932239986-30128078f3c5?w=800'
+    ];
     estimatedSourcePrice = currency === 'USD' ? 8.9 : 36.0;
+    weightInGrams = 680;
+    categoryFeaturesList = [
+      'Minimalist Modern Scandinavian Aesthetic Design',
+      'Food-Grade Eco-Friendly BPA-Free Certified Components',
+      'Whisper-Quiet Operation (<35dB) for Peaceful Bedroom & Living',
+      'Smart Automatic Safety Shut-Off Sensor Mechanism',
+      'Energy Efficient Low Power Consumption'
+    ];
+    detailedSpecs = {
+      'Power Source': 'USB Type-C 5V / 2A Universal Input',
+      'Materials': 'Food-Grade PCTG + ABS + Stainless Steel',
+      'Noise Level': '<35dB Ultra Quiet Bedroom Safe',
+      'Capacity': '500ml Optimal Volume',
+      'Origin': 'Verified Export Grade Manufacturing Hub'
+    };
+    variantColorsList = [
+      { name: 'Warm Cream White', hex: '#fef3c7' },
+      { name: 'Sage Green', hex: '#84cc16' },
+      { name: 'Slate Gray', hex: '#475569' }
+    ];
   }
 
   // Extract ID from URL if any
@@ -861,31 +995,31 @@ export function parseDropshipUrl(
   const pricing = calculateDropshipPricing(estimatedSourcePrice, currency, pricingRule);
   const now = new Date().toISOString();
 
+  const generatedImages = galleryImages.length > 0 ? galleryImages : [sampleImage];
+
   const generatedProduct: Product = {
     id: `ds-${detected}-${Date.now()}`,
     name: title,
     banglaName: banglaTitle,
     slug: title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''),
     category,
+    productType: category,
     price: pricing.sellingPrice,
     originalPrice: pricing.compareAtPrice,
+    costPerItem: pricing.landedCostBDT,
     discountPercent: Math.round(((pricing.compareAtPrice - pricing.sellingPrice) / pricing.compareAtPrice) * 100),
     rating: 4.8,
     reviewCount: Math.floor(60 + Math.random() * 300),
-    images: [
-      sampleImage,
-      'https://images.unsplash.com/photo-1546868871-7041f2a55e12?w=800',
-      'https://images.unsplash.com/photo-1508685096489-7aacd43bd3b1?w=800'
-    ],
+    images: generatedImages,
     inStock: true,
-    stockCount: 50,
+    stockCount: 85,
     soldCount: Math.floor(120 + Math.random() * 800),
-    brand: `${platformConfig.name} Direct`,
+    brand: `${platformConfig.name} Verified`,
     sku: `${skuPrefix}-${extractedId.slice(-6)}`,
     shortDescription: `Direct imported high-quality dropshipping product sourced from verified ${platformConfig.name} suppliers with warranty.`,
-    description: `Authentic factory-grade product sourced directly via ${platformConfig.name}. Tested for premium quality, electrical safety, durability, and high performance.`,
+    description: `Authentic factory-grade product sourced directly via ${platformConfig.name}. Tested for premium quality, electrical safety, durability, and high performance. Includes full accessories and warranty.`,
     banglaDescription: `${platformConfig.name} থেকে সরাসরি ইমপোর্টকৃত প্রিমিয়াম কোয়ালিটি পণ্য। ডেলিভারির সময় পণ্য চেক করে মূল্য পরিশোধের সুযোগ এবং ওয়ারেন্টি সুবিধা।`,
-    features: [
+    features: categoryFeaturesList.length > 0 ? categoryFeaturesList : [
       `100% Genuine Direct Import from ${platformConfig.name}`,
       'Factory Tested for Quality & Safety Assurance',
       'High-grade Durable Materials & Premium Finish',
@@ -893,21 +1027,39 @@ export function parseDropshipUrl(
       'Dedicated Bangladesh Support & Replacement Guarantee'
     ],
     specifications: {
+      ...detailedSpecs,
       'Source Platform': platformConfig.name,
       'Supplier Origin': detected === 'aliexpress' || detected === 'cjdropshipping' ? 'International / China Global' : 'Guangdong, China',
       'Estimated Shipping': platformConfig.defaultShippingDays,
       'Quality Check': 'Grade A+ QC Passed',
       'Warranty Period': '৬ মাসের রিপ্লেসমেন্ট ওয়ারেন্টি'
     },
+    weight: weightInGrams,
+    weightUnit: 'g',
+    countryOfOrigin: 'China',
+    colors: variantColorsList,
     warranty: '৬ মাসের রিপ্লেসমেন্ট ওয়ারেন্টি',
     tags: ['dropship', detected, category.toLowerCase()],
     vendor: `${platformConfig.name} Direct`,
     status: 'active',
+    categoryMetafields: {
+      features: categoryFeaturesList,
+      material: detailedSpecs['Material'] || detailedSpecs['Case Material'] || 'Composite Alloy'
+    },
+    productMetafields: {
+      specification: Object.entries(detailedSpecs).map(([k, v]) => `${k}: ${v}`).join(' | '),
+      warranty: '৬ মাসের রিপ্লেসমেন্ট ওয়ারেন্টি'
+    },
+    seo: {
+      title: title,
+      description: `Shop ${title} directly imported from ${platformConfig.name}. Best wholesale price in Bangladesh with cash on delivery.`,
+      handle: title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+    },
     dropship: {
       platform: detected,
       sourceUrl: cleanUrl,
       sourceId: extractedId,
-      supplierName: `${platformConfig.name} Verified Supplier`,
+      supplierName: `${platformConfig.name} Verified Supplier Hub`,
       sourceCurrency: currency,
       sourcePrice: estimatedSourcePrice,
       shippingDays: platformConfig.defaultShippingDays,
@@ -922,138 +1074,5 @@ export function parseDropshipUrl(
     detectedPlatform: detected,
     sourcePriceFormatted: `${platformConfig.currencySymbol}${estimatedSourcePrice.toFixed(2)} ${currency}`,
     profitCalculation: pricing
-  };
-}
-
-// ---------------------------------------------------------------------------
-// REAL-DATA EXTRACTION VIA THE LOCAL EXPRESS PROXY (server.ts)
-// The proxy first tries the official platform API (if a key is configured),
-// then server-side page scraping, and only if blocked does the client fall
-// back to the simulated parser above.
-// ---------------------------------------------------------------------------
-
-export type DropshipDataSource = 'api' | 'scrape' | 'mock';
-
-export interface ServerExtractProduct {
-  title: string;
-  description: string;
-  images: string[];
-  price: number | null;
-  originalPrice: number | null;
-  currency: 'USD' | 'CNY';
-  brand: string;
-  sku: string | null;
-  supplierName: string;
-  shippingDays: string | null;
-  shippingCost: number | null;
-  stock: boolean | null;
-  rating: number | null;
-  reviewCount: number | null;
-  attributes?: Record<string, string>;
-}
-
-export interface ServerExtractResult {
-  ok: boolean;
-  source: 'api' | 'scrape';
-  platform: DropshipPlatform;
-  product: ServerExtractProduct;
-  message?: string;
-}
-
-export interface ResolvedExtraction {
-  product: Product;
-  profitCalculation: ReturnType<typeof calculateDropshipPricing>;
-  source: DropshipDataSource;
-  sourcePriceText: string;
-  message?: string;
-}
-
-export async function fetchDropshipFromServer(
-  url: string,
-  platformOverride?: DropshipPlatform
-): Promise<ServerExtractResult | null> {
-  try {
-    const res = await fetch('/api/dropship/extract', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url, platformOverride }),
-      signal: AbortSignal.timeout(15000)
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as ServerExtractResult;
-    return data && data.ok ? data : null;
-  } catch (e) {
-    console.error('Dropship server extraction failed', e);
-    return null;
-  }
-}
-
-export async function resolveDropshipProduct(
-  url: string,
-  platformOverride?: DropshipPlatform,
-  pricingRule: DropshipPricingRule = DEFAULT_PRICING_RULE
-): Promise<ResolvedExtraction> {
-  const mock = parseDropshipUrl(url, platformOverride, pricingRule);
-
-  const real = await fetchDropshipFromServer(url, platformOverride);
-
-  if (!real) {
-    return {
-      product: mock.product,
-      profitCalculation: mock.profitCalculation,
-      source: 'mock',
-      sourcePriceText: mock.sourcePriceFormatted
-    };
-  }
-
-  const platform = DROPSHIP_PLATFORMS[real.platform];
-  const srcCurrency: 'USD' | 'CNY' = real.product.currency || platform.currency;
-  const srcPrice = real.product.price ?? mock.product.dropship!.sourcePrice;
-  const shippingBDT = real.product.shippingCost ?? undefined;
-
-  const calc = calculateDropshipPricing(srcPrice, srcCurrency, pricingRule, shippingBDT);
-
-  const images = real.product.images.length > 0 ? real.product.images : mock.product.images;
-  const title = real.product.title || mock.product.name;
-  const desc = real.product.description || mock.product.shortDescription;
-  const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-
-  const product: Product = {
-    ...mock.product,
-    id: `ds-${real.platform}-live-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-    name: title,
-    slug,
-    price: calc.sellingPrice,
-    originalPrice: calc.compareAtPrice,
-    discountPercent: Math.round(((calc.compareAtPrice - calc.sellingPrice) / calc.compareAtPrice) * 100),
-    images,
-    description: desc,
-    shortDescription: desc.slice(0, 160),
-    brand: real.product.brand || mock.product.brand,
-    sku: real.product.sku || mock.product.sku,
-    rating: real.product.rating ?? mock.product.rating,
-    reviewCount: real.product.reviewCount ?? mock.product.reviewCount,
-    inStock: real.product.stock ?? mock.product.inStock,
-    specifications: { ...mock.product.specifications, ...(real.product.attributes || {}) },
-    dropship: {
-      ...mock.product.dropship!,
-      platform: real.platform,
-      sourceUrl: url,
-      sourceId: real.product.sku || mock.product.dropship!.sourceId,
-      supplierName: real.product.supplierName || mock.product.dropship!.supplierName,
-      sourceCurrency: srcCurrency,
-      sourcePrice: srcPrice,
-      shippingCost: shippingBDT,
-      shippingDays: real.product.shippingDays || mock.product.dropship!.shippingDays,
-      dataSource: real.source
-    }
-  };
-
-  return {
-    product,
-    profitCalculation: calc,
-    source: real.source,
-    message: real.message,
-    sourcePriceText: `${platform.currencySymbol}${srcPrice.toFixed(2)} ${srcCurrency}`
   };
 }

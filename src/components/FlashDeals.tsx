@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Flame, Clock, ShoppingCart, Eye, Zap, ArrowRight } from 'lucide-react';
 import { Product, ThemeConfig } from '../types';
+import { TRANSLATIONS, getProductTitle } from '../utils/translations';
 
 interface FlashDealsProps {
   products: Product[];
@@ -8,6 +9,7 @@ interface FlashDealsProps {
   onAddToCart: (product: Product) => void;
   onFastBuyNow: (product: Product) => void;
   flashConfig?: ThemeConfig['flashDeals'];
+  lang?: 'en' | 'bn';
 }
 
 export const FlashDeals: React.FC<FlashDealsProps> = ({
@@ -15,12 +17,14 @@ export const FlashDeals: React.FC<FlashDealsProps> = ({
   onSelectProduct,
   onAddToCart,
   onFastBuyNow,
-  flashConfig
+  flashConfig,
+  lang = 'bn'
 }) => {
   if (flashConfig && !flashConfig.enabled) {
     return null;
   }
 
+  const t = TRANSLATIONS[lang];
   const flashProducts = products.filter((p) => p.isFlashDeal);
 
   // Real countdown timer state
@@ -61,14 +65,14 @@ export const FlashDeals: React.FC<FlashDealsProps> = ({
           <div>
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-xl sm:text-2xl font-black tracking-tight">
-                {flashConfig?.title || 'ফ্ল্যাশ ডিলস (Flash Deals)'}
+                {flashConfig?.title || t.flashDealsTitle}
               </h2>
               <span className="px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-amber-400 text-amber-950 uppercase tracking-wider animate-bounce">
-                {flashConfig?.badgeText || 'সীমিত স্টক!'}
+                {flashConfig?.badgeText || (lang === 'en' ? 'Limited Stock!' : 'সীমিত স্টক!')}
               </span>
             </div>
             <p className="text-xs text-rose-100 mt-0.5">
-              সেরা দামে প্রিমিয়াম গ্যাজেট ও লাইফস্টাইল পণ্য লুফে নিন
+              {t.flashDealsSubtitle}
             </p>
           </div>
         </div>
@@ -76,7 +80,7 @@ export const FlashDeals: React.FC<FlashDealsProps> = ({
         {/* Countdown Box */}
         <div className="flex items-center gap-2 bg-black/30 backdrop-blur-md px-4 py-2.5 rounded-xl border border-white/20">
           <Clock className="w-4 h-4 text-amber-300 animate-pulse" />
-          <span className="text-xs font-semibold text-rose-100 mr-1">অফার শেষ হতে বাকি:</span>
+          <span className="text-xs font-semibold text-rose-100 mr-1">{t.endsIn}</span>
           
           <div className="flex items-center gap-1.5 font-mono font-bold text-white">
             <div className="bg-white/20 rounded px-2 py-1 text-sm">
@@ -112,7 +116,7 @@ export const FlashDeals: React.FC<FlashDealsProps> = ({
               {/* Badge & Discount */}
               <div className="absolute top-3 left-3 z-10 flex flex-col gap-1">
                 <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-rose-600 text-white shadow-xs">
-                  -{product.discountPercent}% OFF
+                  -{product.discountPercent}% {t.off}
                 </span>
                 {product.badge && (
                   <span className="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-slate-900 text-amber-400 shadow-xs">
@@ -124,8 +128,8 @@ export const FlashDeals: React.FC<FlashDealsProps> = ({
               {/* Quick View Floating Button */}
               <button
                 onClick={() => onSelectProduct(product)}
-                className="absolute top-3 right-3 z-10 w-9 h-9 rounded-full bg-white/90 hover:bg-white text-gray-700 hover:text-rose-600 shadow-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                title="Quick View"
+                className="absolute top-3 right-3 z-10 w-9 h-9 rounded-full bg-white/90 hover:bg-white text-gray-700 hover:text-rose-600 shadow-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                title={t.quickView}
               >
                 <Eye className="w-4 h-4" />
               </button>
@@ -137,7 +141,7 @@ export const FlashDeals: React.FC<FlashDealsProps> = ({
               >
                 <img
                   src={product.images[0]}
-                  alt={product.name}
+                  alt={getProductTitle(product, lang)}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 />
               </div>
@@ -153,14 +157,14 @@ export const FlashDeals: React.FC<FlashDealsProps> = ({
                     onClick={() => onSelectProduct(product)}
                     className="text-xs sm:text-sm font-bold text-gray-900 line-clamp-2 mt-1 hover:text-rose-600 cursor-pointer transition-colors"
                   >
-                    {product.name}
+                    {getProductTitle(product, lang)}
                   </h3>
 
                   {/* Stock progress */}
                   <div className="mt-3">
                     <div className="flex justify-between text-[11px] text-gray-500 font-medium mb-1">
-                      <span>বিক্রি হয়েছে: {product.soldCount} টি</span>
-                      <span className="text-rose-600 font-semibold">স্টক: {product.stockCount} টি</span>
+                      <span>{lang === 'en' ? `Sold: ${product.soldCount}` : `বিক্রি হয়েছে: ${product.soldCount} টি`}</span>
+                      <span className="text-rose-600 font-semibold">{lang === 'en' ? `Stock: ${product.stockCount}` : `স্টক: ${product.stockCount} টি`}</span>
                     </div>
                     <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
                       <div
@@ -179,7 +183,7 @@ export const FlashDeals: React.FC<FlashDealsProps> = ({
                       ৳{product.originalPrice.toLocaleString()}
                     </span>
                     <span className="text-[10px] text-emerald-700 bg-emerald-50 font-bold px-1.5 py-0.5 rounded">
-                      সাশ্রয় ৳{savings.toLocaleString()}
+                      {lang === 'en' ? `Save ৳${savings.toLocaleString()}` : `সাশ্রয় ৳${savings.toLocaleString()}`}
                     </span>
                   </div>
                 </div>
@@ -191,7 +195,7 @@ export const FlashDeals: React.FC<FlashDealsProps> = ({
                     className="w-full py-2.5 px-2 rounded-xl border border-gray-300 hover:border-gray-400 text-gray-700 hover:bg-gray-50 text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer"
                   >
                     <ShoppingCart className="w-3.5 h-3.5" />
-                    <span>কার্ট</span>
+                    <span>{t.addToCart}</span>
                   </button>
 
                   <button
@@ -199,10 +203,9 @@ export const FlashDeals: React.FC<FlashDealsProps> = ({
                     className="w-full py-2.5 px-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold flex items-center justify-center gap-1 shadow-md shadow-rose-600/30 hover:shadow-rose-600/50 transition-all cursor-pointer"
                   >
                     <Zap className="w-3.5 h-3.5 fill-white" />
-                    <span>অর্ডার করুন</span>
+                    <span>{t.buyNow}</span>
                   </button>
                 </div>
-
               </div>
 
             </div>

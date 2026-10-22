@@ -2,15 +2,19 @@ import React from 'react';
 import { Truck, ShieldCheck, Banknote, Headphones, RefreshCw, Zap, CheckCircle2 } from 'lucide-react';
 import { STORE_SETTINGS } from '../data/mockData';
 import { ThemeConfig } from '../types';
+import { TRANSLATIONS } from '../utils/translations';
 
 interface TrustBadgesProps {
   trustConfig?: ThemeConfig['trustBadges'];
+  lang?: 'en' | 'bn';
 }
 
-export const TrustBadges: React.FC<TrustBadgesProps> = ({ trustConfig }) => {
+export const TrustBadges: React.FC<TrustBadgesProps> = ({ trustConfig, lang = 'bn' }) => {
   if (trustConfig && !trustConfig.enabled) {
     return null;
   }
+
+  const t = TRANSLATIONS[lang];
 
   const renderIcon = (iconName: string, index: number) => {
     switch (iconName) {
@@ -36,12 +40,21 @@ export const TrustBadges: React.FC<TrustBadgesProps> = ({ trustConfig }) => {
     { bg: 'bg-amber-50', text: 'text-amber-600' }
   ];
 
-  const badges = trustConfig?.badges || [
+  const defaultBadgesBN = [
     { id: '1', title: 'এক্সপ্রেস ডেলিভারি', subtitle: 'ঢাকা ৬০৳ (২৪-৪৮ ঘণ্টা), বাইরে ১২০৳', iconName: 'truck' as const },
     { id: '2', title: 'ক্যাশ অন ডেলিভারি', subtitle: 'পণ্য দেখে টাকা দেওয়ার নিশ্চিন্ত সুবিধা', iconName: 'shield' as const },
     { id: '3', title: '৭ দিনের গ্যারান্টি', subtitle: 'ত্রুটিযুক্ত পণ্যে সহজ এক্সচেঞ্জ সুবিধা', iconName: 'refresh' as const },
     { id: '4', title: '২৪/৭ কাস্টমার সাপোর্ট', subtitle: `হটলাইন: ${STORE_SETTINGS.phone}`, iconName: 'phone' as const }
   ];
+
+  const defaultBadgesEN = [
+    { id: '1', title: 'Express Delivery', subtitle: 'Dhaka ৳60 (24-48h), Outside ৳120', iconName: 'truck' as const },
+    { id: '2', title: 'Cash on Delivery', subtitle: 'Inspect parcel and pay upon delivery', iconName: 'shield' as const },
+    { id: '3', title: '7 Days Guarantee', subtitle: 'Easy replacement for defects', iconName: 'refresh' as const },
+    { id: '4', title: '24/7 Support', subtitle: `Hotline: ${STORE_SETTINGS.phone}`, iconName: 'phone' as const }
+  ];
+
+  const badges = trustConfig?.badges || (lang === 'en' ? defaultBadgesEN : defaultBadgesBN);
 
   return (
     <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">

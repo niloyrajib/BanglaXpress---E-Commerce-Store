@@ -1,7 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Search, ShoppingBag, Heart, Zap, PhoneCall, X, ArrowRight, Menu, DownloadCloud } from 'lucide-react';
+import { Search, ShoppingBag, Heart, Zap, PhoneCall, X, ArrowRight, Menu, Scale } from 'lucide-react';
 import { Product, Category } from '../../types';
 import { STORE_SETTINGS } from '../../data/mockData';
+import { BanglaXpressLogo } from '../BanglaXpressLogo';
+import { TRANSLATIONS, getCategoryDisplayName, getProductTitle } from '../../utils/translations';
 
 interface MainNavbarProps {
   categories: Category[];
@@ -13,11 +15,14 @@ interface MainNavbarProps {
   cartCount: number;
   cartTotal: number;
   wishlistCount: number;
+  compareCount?: number;
+  lang?: 'en' | 'bn';
+  onSelectLanguage?: (lang: 'en' | 'bn') => void;
   onOpenCart: () => void;
   onOpenWishlist: () => void;
+  onOpenCompare?: () => void;
   onSelectProduct: (product: Product) => void;
   onToggleMobileMenu: () => void;
-  onOpenDropshipImport: () => void;
   onGoHome: () => void;
 }
 
@@ -31,13 +36,17 @@ export const MainNavbar: React.FC<MainNavbarProps> = ({
   cartCount,
   cartTotal,
   wishlistCount,
+  compareCount = 0,
+  lang = 'bn',
+  onSelectLanguage,
   onOpenCart,
   onOpenWishlist,
+  onOpenCompare,
   onSelectProduct,
   onToggleMobileMenu,
-  onOpenDropshipImport,
   onGoHome
 }) => {
+  const t = TRANSLATIONS[lang];
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
 
@@ -81,28 +90,13 @@ export const MainNavbar: React.FC<MainNavbarProps> = ({
               <Menu className="w-6 h-6" />
             </button>
 
-            {/* Brand Logo */}
+            {/* Brand Logo with Official BanglaXpress Design */}
             <div
               id="brand-logo"
               onClick={onGoHome}
-              className="cursor-pointer flex items-center gap-2 group select-none"
+              className="cursor-pointer flex items-center gap-1 group select-none hover:opacity-95 transition-opacity"
             >
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-rose-600 to-red-500 flex items-center justify-center text-white shadow-md shadow-rose-200 group-hover:scale-105 transition-transform">
-                <Zap className="w-6 h-6 fill-white" />
-              </div>
-              <div>
-                <div className="flex items-center">
-                  <span className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 font-sans">
-                    Bangla<span className="text-rose-600">Xpress</span>
-                  </span>
-                  <span className="ml-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 uppercase tracking-wider">
-                    Store
-                  </span>
-                </div>
-                <p className="text-[10.5px] text-gray-500 font-medium tracking-wide">
-                  স্মার্ট শপিং • সুপার ফাস্ট ডেলিভারি
-                </p>
-              </div>
+              <BanglaXpressLogo variant="horizontal" showTagline={true} />
             </div>
           </div>
 
@@ -117,10 +111,10 @@ export const MainNavbar: React.FC<MainNavbarProps> = ({
                 onChange={(e) => onSelectCategory(e.target.value)}
                 className="bg-gray-50 border-r border-gray-200 text-xs font-semibold text-gray-700 px-3 py-2.5 outline-none cursor-pointer hover:bg-gray-100"
               >
-                <option value="all">সকল ক্যাটাগরি (All)</option>
+                <option value="all">{t.allCategoriesDropdown}</option>
                 {categories.map((c) => (
                   <option key={c.id} value={c.name}>
-                    {c.name} ({c.itemCount})
+                    {getCategoryDisplayName(c, lang)} ({c.itemCount})
                   </option>
                 ))}
               </select>
@@ -136,7 +130,7 @@ export const MainNavbar: React.FC<MainNavbarProps> = ({
                     setShowSearchDropdown(true);
                   }}
                   onFocus={() => setShowSearchDropdown(true)}
-                  placeholder="পণ্য বা মডেল সার্চ করুন (যেমন: T900 Smartwatch, Earbuds, Trimmer...)"
+                  placeholder={t.searchPlaceholder}
                   className="w-full px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 outline-none"
                 />
                 {searchQuery && (
@@ -155,7 +149,7 @@ export const MainNavbar: React.FC<MainNavbarProps> = ({
                 className="bg-rose-600 hover:bg-rose-700 text-white px-5 py-2 flex items-center justify-center font-medium transition-colors"
               >
                 <Search className="w-4 h-4 mr-1" />
-                <span className="text-xs font-bold">সার্চ</span>
+                <span className="text-xs font-bold">{t.searchBtn}</span>
               </button>
             </div>
 
@@ -163,8 +157,8 @@ export const MainNavbar: React.FC<MainNavbarProps> = ({
             {showSearchDropdown && searchResults.length > 0 && (
               <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-2xl border border-gray-100 z-50 overflow-hidden divide-y divide-gray-100 animate-in fade-in slide-in-from-top-2 duration-150">
                 <div className="p-2 bg-gray-50 text-xs font-semibold text-gray-500 flex justify-between">
-                  <span>অনুসন্ধানের ফলাফল ({searchResults.length})</span>
-                  <span>সরাসরি দেখতে ক্লিক করুন</span>
+                  <span>{t.searchResults} ({searchResults.length})</span>
+                  <span>{t.clickToView}</span>
                 </div>
                 {searchResults.map((product) => (
                   <div
@@ -183,10 +177,10 @@ export const MainNavbar: React.FC<MainNavbarProps> = ({
                     />
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-semibold text-gray-900 truncate group-hover:text-rose-600">
-                        {product.name}
+                        {getProductTitle(product, lang)}
                       </p>
                       <p className="text-[11px] text-gray-500 truncate">
-                        {product.banglaName}
+                        {lang === 'bn' ? product.name : (product.banglaName || product.category)}
                       </p>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-xs font-bold text-rose-600">
@@ -209,20 +203,6 @@ export const MainNavbar: React.FC<MainNavbarProps> = ({
 
           {/* Right Action Buttons */}
           <div className="flex items-center gap-2 sm:gap-3">
-            {/* 1-Click Dropship Product Import */}
-            <button
-              id="header-dropship-import-btn"
-              onClick={onOpenDropshipImport}
-              className="flex items-center gap-2 px-3 py-2 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white transition-all shadow-md shadow-violet-200 cursor-pointer"
-              title="AliExpress, 1688, Alibaba, CJ Dropshipping, Taobao থেকে 1-Click ড্রপশিপ ইমপোর্ট"
-            >
-              <DownloadCloud className="w-5 h-5" />
-              <span className="text-left hidden sm:block">
-                <span className="block text-[10px] font-medium text-white/80 leading-none">1-Click</span>
-                <span className="block text-[11px] font-bold leading-tight">Import</span>
-              </span>
-            </button>
-
             {/* Quick Hotline Badge */}
             <a
               id="header-phone-box"
@@ -233,17 +213,66 @@ export const MainNavbar: React.FC<MainNavbarProps> = ({
                 <PhoneCall className="w-4 h-4" />
               </div>
               <div className="text-xs">
-                <p className="text-[10px] text-gray-500 font-medium">অর্ডার হটলাইন</p>
+                <p className="text-[10px] text-gray-500 font-medium">{t.orderHotline}</p>
                 <p className="font-bold text-gray-900">{STORE_SETTINGS.phone}</p>
               </div>
             </a>
+
+            {/* Language Switcher */}
+            {onSelectLanguage && (
+              <div className="flex items-center bg-gray-100 rounded-xl p-0.5 border border-gray-200">
+                <button
+                  type="button"
+                  id="navbar-lang-bn"
+                  onClick={() => onSelectLanguage('bn')}
+                  className={`px-2 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    lang === 'bn'
+                      ? 'bg-white text-rose-600 shadow-xs'
+                      : 'text-gray-500 hover:text-gray-900'
+                  }`}
+                  title="বাংলা ভাষায় দেখুন"
+                >
+                  বাং
+                </button>
+                <button
+                  type="button"
+                  id="navbar-lang-en"
+                  onClick={() => onSelectLanguage('en')}
+                  className={`px-2 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    lang === 'en'
+                      ? 'bg-white text-rose-600 shadow-xs'
+                      : 'text-gray-500 hover:text-gray-900'
+                  }`}
+                  title="Switch to English"
+                >
+                  EN
+                </button>
+              </div>
+            )}
+
+            {/* Compare Button */}
+            {onOpenCompare && (
+              <button
+                id="header-compare-btn"
+                onClick={onOpenCompare}
+                className="relative p-2.5 rounded-xl border border-gray-200 hover:border-rose-300 hover:bg-gray-50 text-gray-700 hover:text-rose-600 transition-all cursor-pointer"
+                title={t.compare}
+              >
+                <Scale className="w-5 h-5" />
+                {compareCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-rose-600 text-white rounded-full text-[10px] font-bold flex items-center justify-center shadow-xs">
+                    {compareCount}
+                  </span>
+                )}
+              </button>
+            )}
 
             {/* Wishlist Button */}
             <button
               id="header-wishlist-btn"
               onClick={onOpenWishlist}
-              className="relative p-2.5 rounded-xl border border-gray-200 hover:border-rose-300 hover:bg-gray-50 text-gray-700 hover:text-rose-600 transition-all"
-              title="Wishlist"
+              className="relative p-2.5 rounded-xl border border-gray-200 hover:border-rose-300 hover:bg-gray-50 text-gray-700 hover:text-rose-600 transition-all cursor-pointer"
+              title={t.wishlist}
             >
               <Heart className="w-5 h-5" />
               {wishlistCount > 0 && (
@@ -268,7 +297,7 @@ export const MainNavbar: React.FC<MainNavbarProps> = ({
                 )}
               </div>
               <div className="text-left hidden sm:block">
-                <p className="text-[10px] text-slate-400 font-medium">মাই কার্ট</p>
+                <p className="text-[10px] text-slate-400 font-medium">{t.myCart}</p>
                 <p className="text-xs font-bold text-white">৳{cartTotal.toLocaleString()}</p>
               </div>
             </button>
@@ -284,7 +313,7 @@ export const MainNavbar: React.FC<MainNavbarProps> = ({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="পণ্য বা মডেল সার্চ করুন..."
+              placeholder={t.searchPlaceholder}
               className="flex-1 px-3 py-2 text-xs text-gray-900 outline-none"
             />
             <button className="bg-rose-600 text-white px-3 py-2 flex items-center justify-center">

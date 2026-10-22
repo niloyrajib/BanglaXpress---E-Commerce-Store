@@ -15,19 +15,22 @@ import {
 } from 'lucide-react';
 import { STORE_SETTINGS } from '../data/mockData';
 import { ThemeConfig } from '../types';
+import { BanglaXpressLogo } from './BanglaXpressLogo';
 
 interface FooterProps {
   onOpenTracking: () => void;
   onSelectCategory: (cat: string) => void;
   onOpenAdmin: () => void;
   footerConfig?: ThemeConfig['footer'];
+  lang?: 'en' | 'bn';
 }
 
 export const Footer: React.FC<FooterProps> = ({
   onOpenTracking,
   onSelectCategory,
   onOpenAdmin,
-  footerConfig
+  footerConfig,
+  lang = 'bn'
 }) => {
   const brandName = footerConfig?.brandName || 'BanglaXpress';
   const brandSuffix = footerConfig?.brandSuffix !== undefined ? footerConfig.brandSuffix : '.store';
@@ -37,15 +40,27 @@ export const Footer: React.FC<FooterProps> = ({
   const address = footerConfig?.address || STORE_SETTINGS.address;
   const aboutText =
     footerConfig?.aboutText ||
-    'BanglaXpress বাংলাদেশের অন্যতম নির্ভরযোগ্য গ্যাজেট ও লাইফস্টাইল অনলাইন স্টোর। আমরা শতভাগ অরিজিনাল পণ্য, দ্রুততম হোম ডেলিভারি এবং ক্যাশ অন ডেলিভারি সুবিধা নিশ্চিত করি।';
+    (lang === 'en'
+      ? 'BanglaXpress is one of Bangladesh’s leading trusted gadget & lifestyle online stores. We guarantee 100% original products, fastest nationwide home delivery, and reliable cash on delivery.'
+      : 'BanglaXpress বাংলাদেশের অন্যতম নির্ভরযোগ্য গ্যাজেট ও লাইফস্টাইল অনলাইন স্টোর। আমরা শতভাগ অরিজিনাল পণ্য, দ্রুততম হোম ডেলিভারি এবং ক্যাশ অন ডেলিভারি সুবিধা নিশ্চিত করি।');
   const copyright =
     footerConfig?.copyrightText ||
     '© 2026 BanglaXpress Inc. All Rights Reserved. Powered by Aurora Modern v2.4';
 
-  const categoriesTitle = footerConfig?.categoriesTitle || 'জনপ্রিয় ক্যাটাগরি';
+  const categoriesTitle =
+    footerConfig?.categoriesTitle || (lang === 'en' ? 'Popular Categories' : 'জনপ্রিয় ক্যাটাগরি');
   const categoriesList =
     footerConfig?.categoriesList && footerConfig.categoriesList.length > 0
       ? footerConfig.categoriesList
+      : lang === 'en'
+      ? [
+          { label: 'Smart Watches & Calling Watches', categoryName: 'Smart Watches' },
+          { label: 'TWS & Wireless Earbuds', categoryName: 'Earbuds & Audio' },
+          { label: 'Fast GaN Chargers & Power Banks', categoryName: 'Power & Charging' },
+          { label: "Men's Premium Baseball Caps", categoryName: "Men's Caps & Fashion" },
+          { label: 'Smart Home & Kitchen Gadgets', categoryName: 'Home & Kitchen' },
+          { label: 'Gaming Accessories & Keyboards', categoryName: 'Computer & Gaming' }
+        ]
       : [
           { label: 'স্মার্টওয়াচ ও কলিং ওয়াচ (Smart Watches)', categoryName: 'Smart Watches' },
           { label: 'টিডব্লিউএস ও ব্লুটুথ ইয়ারবাডস (TWS Earbuds)', categoryName: 'Earbuds & Audio' },
@@ -55,10 +70,19 @@ export const Footer: React.FC<FooterProps> = ({
           { label: 'গেমিং কিবোর্ড ও মাউস (Gaming Accessories)', categoryName: 'Computer & Gaming' }
         ];
 
-  const customerCareTitle = footerConfig?.customerCareTitle || 'গ্রাহক সেবা ও পলিসি';
+  const customerCareTitle =
+    footerConfig?.customerCareTitle || (lang === 'en' ? 'Customer Care & Policies' : 'গ্রাহক সেবা ও পলিসি');
   const customerCareItems =
     footerConfig?.customerCareItems && footerConfig.customerCareItems.length > 0
       ? footerConfig.customerCareItems
+      : lang === 'en'
+      ? [
+          { label: 'Live Order Tracking', iconType: 'truck' as const, actionType: 'track' as const },
+          { label: '7 Days Return & Replacement Policy', iconType: 'refresh' as const, actionType: 'none' as const },
+          { label: 'Warranty Claim Instructions', iconType: 'shield' as const, actionType: 'none' as const },
+          { label: 'Delivery Schedule (Dhaka 24h, Nationwide 48-72h)', iconType: 'clock' as const, actionType: 'none' as const },
+          { label: 'Shop Merchant & Admin Dashboard', iconType: 'link' as const, actionType: 'admin' as const }
+        ]
       : [
           { label: 'লাইভ অর্ডার ট্র্যাকিং (Track Order)', iconType: 'truck' as const, actionType: 'track' as const },
           { label: '৭ দিনের রিটার্ন ও রিপ্লেসমেন্ট পলিসি', iconType: 'refresh' as const, actionType: 'none' as const },
@@ -67,7 +91,8 @@ export const Footer: React.FC<FooterProps> = ({
           { label: 'Laravel Merchant & Admin Management Panel', iconType: 'link' as const, actionType: 'admin' as const }
         ];
 
-  const paymentTitle = footerConfig?.paymentTitle || 'পেমেন্ট মাধ্যমসমূহ';
+  const paymentTitle =
+    footerConfig?.paymentTitle || (lang === 'en' ? 'Accepted Payment Methods' : 'পেমেন্ট মাধ্যমসমূহ');
   const paymentMethods =
     footerConfig?.paymentMethods && footerConfig.paymentMethods.length > 0
       ? footerConfig.paymentMethods
@@ -79,7 +104,8 @@ export const Footer: React.FC<FooterProps> = ({
           { name: 'Visa / Master', colorScheme: 'blue' }
         ];
 
-  const courierTitle = footerConfig?.courierTitle || 'ডেলিভারি পার্টনার';
+  const courierTitle =
+    footerConfig?.courierTitle || (lang === 'en' ? 'Delivery Partners' : 'ডেলিভারি পার্টনার');
   const couriersList =
     footerConfig?.couriersList && footerConfig.couriersList.length > 0
       ? footerConfig.couriersList
@@ -88,6 +114,12 @@ export const Footer: React.FC<FooterProps> = ({
   const legalLinks =
     footerConfig?.legalLinks && footerConfig.legalLinks.length > 0
       ? footerConfig.legalLinks
+      : lang === 'en'
+      ? [
+          { label: 'Privacy Policy', url: '#' },
+          { label: 'Terms of Service', url: '#' },
+          { label: 'Return & Refund Policy', url: '#' }
+        ]
       : [
           { label: 'প্রাইভেসি পলিসি', url: '#' },
           { label: 'ব্যবহারের শর্তাবলী', url: '#' },
@@ -143,17 +175,45 @@ export const Footer: React.FC<FooterProps> = ({
           
           {/* Col 1: Brand & Bio (4 cols) */}
           <div className="lg:col-span-4 space-y-4">
-            <div className="flex items-center gap-2">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-rose-600 to-red-500 flex items-center justify-center text-white shadow-md">
-                <Zap className="w-6 h-6 fill-white" />
-              </div>
-              <span className="text-2xl font-black text-white tracking-tight font-sans">
+            {/* Store Official Logo */}
+            <div className="flex items-center">
+              {footerConfig?.logoUrl ? (
+                <div
+                  className="cursor-pointer inline-flex items-center hover:opacity-95 transition-opacity"
+                  onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                >
+                  <img
+                    src={footerConfig.logoUrl}
+                    alt={brandName}
+                    className="h-10 sm:h-12 w-auto object-contain max-w-[220px]"
+                  />
+                </div>
+              ) : footerConfig?.logoStyle === 'transparent' ? (
+                <div
+                  className="cursor-pointer select-none inline-flex items-center hover:opacity-95 transition-opacity"
+                  onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                >
+                  <BanglaXpressLogo variant="horizontal" theme="dark" showTagline={true} />
+                </div>
+              ) : (
+                <div
+                  className="cursor-pointer select-none inline-flex items-center bg-white px-3.5 py-1.5 rounded-xl shadow-xs border border-white/20 hover:opacity-95 transition-all"
+                  onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                >
+                  <BanglaXpressLogo variant="horizontal" size="sm" showTagline={true} />
+                </div>
+              )}
+            </div>
+
+            {/* Custom Brand Name if changed from default */}
+            {brandName && brandName !== 'BanglaXpress' && !footerConfig?.logoUrl && (
+              <div className="text-xl font-black text-white tracking-tight font-sans">
                 {brandName}
                 {brandSuffix && (
                   <span className="ml-1 text-xs font-mono font-normal text-rose-400">{brandSuffix}</span>
                 )}
-              </span>
-            </div>
+              </div>
+            )}
 
             <p className="text-xs sm:text-sm text-slate-400 leading-relaxed max-w-sm">
               {aboutText}

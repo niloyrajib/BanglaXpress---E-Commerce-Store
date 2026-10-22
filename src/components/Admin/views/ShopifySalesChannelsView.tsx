@@ -21,6 +21,7 @@ interface ShopifySalesChannelsViewProps {
   onOpenStorefront?: () => void;
   onOpenThemeCustomizer?: () => void;
   onOpenFooterEditor?: () => void;
+  onOpenSEOGenerator?: () => void;
 }
 
 export const ShopifySalesChannelsView: React.FC<ShopifySalesChannelsViewProps> = ({
@@ -28,7 +29,8 @@ export const ShopifySalesChannelsView: React.FC<ShopifySalesChannelsViewProps> =
   products,
   onOpenStorefront,
   onOpenThemeCustomizer,
-  onOpenFooterEditor
+  onOpenFooterEditor,
+  onOpenSEOGenerator
 }) => {
   // POS local state
   const [posCart, setPosCart] = useState<{ product: Product; qty: number }[]>([]);
@@ -118,6 +120,15 @@ export const ShopifySalesChannelsView: React.FC<ShopifySalesChannelsViewProps> =
                     className="px-3.5 py-2 bg-emerald-50 border border-emerald-300 text-emerald-800 rounded-lg text-xs font-bold hover:bg-emerald-100 transition-colors flex items-center gap-1.5"
                   >
                     <span>ফুটার কাস্টমাইজ করুন (Footer Editor)</span>
+                  </button>
+                )}
+                {onOpenSEOGenerator && (
+                  <button
+                    type="button"
+                    onClick={onOpenSEOGenerator}
+                    className="px-3.5 py-2 bg-rose-50 border border-rose-300 text-rose-800 rounded-lg text-xs font-bold hover:bg-rose-100 transition-colors flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <span>Meta Tag & SEO Generator</span>
                   </button>
                 )}
                 <button

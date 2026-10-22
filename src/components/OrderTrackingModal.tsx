@@ -8,13 +8,15 @@ interface OrderTrackingModalProps {
   onClose: () => void;
   orders: Order[];
   initialOrderId?: string;
+  lang?: 'en' | 'bn';
 }
 
 export const OrderTrackingModal: React.FC<OrderTrackingModalProps> = ({
   isOpen,
   onClose,
   orders,
-  initialOrderId = ''
+  initialOrderId = '',
+  lang = 'bn'
 }) => {
   if (!isOpen) return null;
 
@@ -30,7 +32,11 @@ export const OrderTrackingModal: React.FC<OrderTrackingModalProps> = ({
 
     const q = searchQuery.trim().toLowerCase();
     if (!q) {
-      setErrorMsg('অনুগ্রহ করে অর্ডার আইডি (যেমন: BX-89210) অথবা ফোন নাম্বার লিখুন');
+      setErrorMsg(
+        lang === 'en'
+          ? 'Please enter your Order ID (e.g. BX-89210) or Phone Number'
+          : 'অনুগ্রহ করে অর্ডার আইডি (যেমন: BX-89210) অথবা ফোন নাম্বার লিখুন'
+      );
       return;
     }
 
@@ -41,7 +47,11 @@ export const OrderTrackingModal: React.FC<OrderTrackingModalProps> = ({
     if (found) {
       setSearchedOrder(found);
     } else {
-      setErrorMsg(`'${searchQuery}' এর জন্য কোনো অর্ডার খুঁজে পাওয়া যায়নি। অনুগ্রহ করে সঠিক আইডি লিখুন।`);
+      setErrorMsg(
+        lang === 'en'
+          ? `No order found for '${searchQuery}'. Please check your ID and try again.`
+          : `'${searchQuery}' এর জন্য কোনো অর্ডার খুঁজে পাওয়া যায়নি। অনুগ্রহ করে সঠিক আইডি লিখুন।`
+      );
       setSearchedOrder(null);
     }
   };
@@ -66,16 +76,18 @@ export const OrderTrackingModal: React.FC<OrderTrackingModalProps> = ({
             </div>
             <div>
               <h2 className="text-sm sm:text-base font-bold">
-                লাইভ অর্ডার ট্র্যাকিং (Order Live Tracking)
+                {lang === 'en' ? 'Live Order Tracking' : 'লাইভ অর্ডার ট্র্যাকিং (Order Live Tracking)'}
               </h2>
               <p className="text-[11px] text-slate-400">
-                আপনার পার্সেলের সর্বশেষ অবস্থা জানতে অর্ডার আইডি বা ফোন নম্বর দিন
+                {lang === 'en'
+                  ? 'Enter your Order ID or phone number to check current parcel status'
+                  : 'আপনার পার্সেলের সর্বশেষ অবস্থা জানতে অর্ডার আইডি বা ফোন নম্বর দিন'}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-full hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
+            className="p-1.5 rounded-full hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -92,7 +104,7 @@ export const OrderTrackingModal: React.FC<OrderTrackingModalProps> = ({
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="অর্ডার আইডি (যেমন: BX-89210) বা ফোন নম্বর"
+                  placeholder={lang === 'en' ? 'Order ID (e.g. BX-89210) or phone number' : 'অর্ডার আইডি (যেমন: BX-89210) বা ফোন নম্বর'}
                   className="w-full pl-9 pr-3 py-2.5 bg-gray-50 border border-gray-300 rounded-xl text-xs sm:text-sm text-gray-900 font-mono outline-none focus:bg-white focus:border-rose-600 focus:ring-2 focus:ring-rose-100 transition-all uppercase"
                 />
                 <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -101,13 +113,15 @@ export const OrderTrackingModal: React.FC<OrderTrackingModalProps> = ({
                 type="submit"
                 className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs sm:text-sm font-bold rounded-xl transition-colors shadow-md shadow-rose-600/30 cursor-pointer"
               >
-                ট্র্যাক করুন
+                {lang === 'en' ? 'Track Order' : 'ট্র্যাক করুন'}
               </button>
             </form>
 
             {/* Quick Demo Order Chips */}
             <div className="mt-2.5 flex items-center gap-2 flex-wrap text-[11px] text-gray-500">
-              <span className="font-semibold text-gray-700">ডেমো আইডি দিয়ে টেস্ট করুন:</span>
+              <span className="font-semibold text-gray-700">
+                {lang === 'en' ? 'Test with demo ID:' : 'ডেমো আইডি দিয়ে টেস্ট করুন:'}
+              </span>
               {orders.slice(0, 3).map((ord) => (
                 <button
                   key={ord.id}
@@ -143,18 +157,20 @@ export const OrderTrackingModal: React.FC<OrderTrackingModalProps> = ({
                     </span>
                   </div>
                   <p className="text-[11px] text-gray-500 mt-0.5">
-                    অর্ডার তারিখ: {searchedOrder.createdAt}
+                    {lang === 'en' ? 'Order Date: ' : 'অর্ডার তারিখ: '}{searchedOrder.createdAt}
                   </p>
                 </div>
 
                 <div className="text-left sm:text-right">
-                  <p className="text-xs text-gray-500 font-medium">কুরিয়ার সার্ভিস:</p>
+                  <p className="text-xs text-gray-500 font-medium">
+                    {lang === 'en' ? 'Courier Service:' : 'কুরিয়ার সার্ভিস:'}
+                  </p>
                   <p className="text-xs font-bold text-gray-900">
                     {searchedOrder.courierName || 'Steadfast Express'}
                   </p>
                   {searchedOrder.trackingNumber && (
                     <p className="text-[10.5px] font-mono text-rose-600">
-                      ট্র্যাকিং কোড: {searchedOrder.trackingNumber}
+                      {lang === 'en' ? 'Tracking Code: ' : 'ট্র্যাকিং কোড: '}{searchedOrder.trackingNumber}
                     </p>
                   )}
                 </div>
@@ -164,7 +180,7 @@ export const OrderTrackingModal: React.FC<OrderTrackingModalProps> = ({
               <div>
                 <h4 className="text-xs font-bold uppercase tracking-wider text-gray-700 mb-4 flex items-center gap-1.5">
                   <Package className="w-4 h-4 text-rose-600" />
-                  <span>ডেলিভারি ট্র্যাকিং হিস্ট্রি</span>
+                  <span>{lang === 'en' ? 'Delivery Tracking History' : 'ডেলিভারি ট্র্যাকিং হিস্ট্রি'}</span>
                 </h4>
 
                 <div className="relative pl-6 space-y-6 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-gray-200">
@@ -221,7 +237,9 @@ export const OrderTrackingModal: React.FC<OrderTrackingModalProps> = ({
               {/* Order Items & Customer Address Recap */}
               <div className="pt-4 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                 <div className="bg-gray-50 p-3 rounded-xl">
-                  <span className="font-bold text-gray-700 block mb-1">ডেলিভারি তথ্য:</span>
+                  <span className="font-bold text-gray-700 block mb-1">
+                    {lang === 'en' ? 'Delivery Details:' : 'ডেলিভারি তথ্য:'}
+                  </span>
                   <p className="text-gray-900 font-semibold">{searchedOrder.customerName}</p>
                   <p className="text-gray-600">{searchedOrder.phone}</p>
                   <p className="text-gray-500 mt-1">{searchedOrder.address}, {searchedOrder.cityDivision}</p>
@@ -229,12 +247,14 @@ export const OrderTrackingModal: React.FC<OrderTrackingModalProps> = ({
 
                 <div className="bg-gray-50 p-3 rounded-xl flex flex-col justify-between">
                   <div>
-                    <span className="font-bold text-gray-700 block mb-1">পেমেন্ট ও মোট বিল:</span>
+                    <span className="font-bold text-gray-700 block mb-1">
+                      {lang === 'en' ? 'Payment & Total Bill:' : 'পেমেন্ট ও মোট বিল:'}
+                    </span>
                     <p className="text-gray-600 capitalize">
-                      পেমেন্ট: <strong>{searchedOrder.paymentMethod.toUpperCase()}</strong> ({searchedOrder.paymentStatus})
+                      {lang === 'en' ? 'Payment: ' : 'পেমেন্ট: '}<strong>{searchedOrder.paymentMethod.toUpperCase()}</strong> ({searchedOrder.paymentStatus})
                     </p>
                     <p className="text-sm font-black text-rose-600 font-mono mt-1">
-                      সর্বমোট: ৳{searchedOrder.total.toLocaleString()}
+                      {lang === 'en' ? 'Total: ৳' : 'সর্বমোট: ৳'}{searchedOrder.total.toLocaleString()}
                     </p>
                   </div>
                   <a
@@ -242,7 +262,7 @@ export const OrderTrackingModal: React.FC<OrderTrackingModalProps> = ({
                     className="mt-2 text-[11px] text-rose-600 hover:text-rose-700 font-semibold flex items-center gap-1"
                   >
                     <Phone className="w-3 h-3" />
-                    <span>প্রয়োজনে কাস্টমার কেয়ারে কল করুন</span>
+                    <span>{lang === 'en' ? 'Call Customer Support if needed' : 'প্রয়োজনে কাস্টমার কেয়ারে কল করুন'}</span>
                   </a>
                 </div>
               </div>

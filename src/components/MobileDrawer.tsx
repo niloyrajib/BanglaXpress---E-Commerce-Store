@@ -1,7 +1,8 @@
 import React from 'react';
-import { X, Flame, Truck, Phone, MessageCircle, UserCheck, LayoutGrid, ChevronRight, Zap, DownloadCloud } from 'lucide-react';
+import { X, Flame, Truck, Phone, MessageCircle, UserCheck, LayoutGrid, ChevronRight, Zap, Scale, Globe } from 'lucide-react';
 import { Category } from '../types';
 import { STORE_SETTINGS } from '../data/mockData';
+import { TRANSLATIONS, getCategoryDisplayName } from '../utils/translations';
 
 interface MobileDrawerProps {
   isOpen: boolean;
@@ -11,7 +12,10 @@ interface MobileDrawerProps {
   onOpenTracking: () => void;
   onOpenAdmin: () => void;
   onScrollToFlash: () => void;
-  onOpenDropshipImport: () => void;
+  compareCount?: number;
+  onOpenCompare?: () => void;
+  lang?: 'en' | 'bn';
+  onSelectLanguage?: (lang: 'en' | 'bn') => void;
 }
 
 export const MobileDrawer: React.FC<MobileDrawerProps> = ({
@@ -22,9 +26,14 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
   onOpenTracking,
   onOpenAdmin,
   onScrollToFlash,
-  onOpenDropshipImport
+  compareCount = 0,
+  onOpenCompare,
+  lang = 'bn',
+  onSelectLanguage
 }) => {
   if (!isOpen) return null;
+
+  const t = TRANSLATIONS[lang];
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden bg-black/60 backdrop-blur-xs flex justify-start">
@@ -50,6 +59,36 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
           </button>
         </div>
 
+        {/* Language Selection Bar inside Mobile Drawer */}
+        {onSelectLanguage && (
+          <div className="px-4 py-2.5 bg-slate-800 border-b border-slate-700 flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+              <Globe className="w-3.5 h-3.5 text-rose-400" />
+              <span>{lang === 'en' ? 'Language' : 'ভাষা নির্বাচন'}</span>
+            </span>
+            <div className="flex items-center bg-slate-900 rounded-lg p-0.5 border border-slate-700">
+              <button
+                type="button"
+                onClick={() => onSelectLanguage('bn')}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold transition-all ${
+                  lang === 'bn' ? 'bg-rose-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <span>🇧🇩</span> বাংলা
+              </button>
+              <button
+                type="button"
+                onClick={() => onSelectLanguage('en')}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold transition-all ${
+                  lang === 'en' ? 'bg-rose-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <span>🇬🇧</span> EN
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Links list */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3 divide-y divide-gray-100">
           
@@ -63,7 +102,7 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
             >
               <div className="flex items-center gap-2">
                 <Flame className="w-4 h-4 fill-rose-600 text-rose-600" />
-                <span>ফ্ল্যাশ ডিলস (Flash Deals)</span>
+                <span>{lang === 'en' ? 'Flash Deals' : 'ফ্ল্যাশ ডিলস (Flash Deals)'}</span>
               </div>
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -77,31 +116,32 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
             >
               <div className="flex items-center gap-2">
                 <Truck className="w-4 h-4 text-sky-600" />
-                <span>অর্ডার ট্র্যাক করুন (Track Order)</span>
+                <span>{t.trackOrder}</span>
               </div>
               <ChevronRight className="w-4 h-4 text-gray-400" />
             </button>
 
-            {/* 1-Click Dropship Import */}
-            <button
-              onClick={() => {
-                onOpenDropshipImport();
-                onClose();
-              }}
-              className="w-full text-left py-2.5 px-3 rounded-xl bg-gradient-to-r from-violet-50 to-fuchsia-50 text-violet-700 text-xs font-bold flex items-center justify-between border border-violet-200/60"
-            >
-              <div className="flex items-center gap-2">
-                <DownloadCloud className="w-4 h-4 text-violet-600" />
-                <span>1-Click ড্রপশিপ ইমপোর্ট (AliExpress / 1688 / Alibaba / CJ / Taobao)</span>
-              </div>
-              <ChevronRight className="w-4 h-4 text-violet-400" />
-            </button>
+            {onOpenCompare && (
+              <button
+                onClick={() => {
+                  onOpenCompare();
+                  onClose();
+                }}
+                className="w-full text-left py-2.5 px-3 rounded-xl hover:bg-rose-50 text-slate-800 hover:text-rose-600 text-xs font-semibold flex items-center justify-between"
+              >
+                <div className="flex items-center gap-2">
+                  <Scale className="w-4 h-4 text-rose-500" />
+                  <span>{lang === 'en' ? `Compare Products (${compareCount})` : `পণ্য তুলনা (${compareCount} টি)`}</span>
+                </div>
+                <ChevronRight className="w-4 h-4 text-gray-400" />
+              </button>
+            )}
           </div>
 
           {/* Categories */}
           <div className="pt-3">
             <h4 className="text-[11px] font-bold uppercase tracking-wider text-gray-400 mb-2 px-3">
-              সকল ক্যাটাগরি
+              {t.allCategories}
             </h4>
             <div className="space-y-0.5">
               <button
@@ -111,7 +151,7 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
                 }}
                 className="w-full text-left py-2 px-3 rounded-lg text-xs font-medium text-gray-800 hover:bg-gray-50 flex items-center justify-between"
               >
-                <span>সব প্রোডাক্ট (All Products)</span>
+                <span>{lang === 'en' ? 'All Products' : 'সব প্রোডাক্ট (All Products)'}</span>
                 <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
               </button>
               {categories.map((c) => (
@@ -123,7 +163,7 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
                   }}
                   className="w-full text-left py-2 px-3 rounded-lg text-xs font-medium text-gray-700 hover:bg-rose-50 hover:text-rose-600 flex items-center justify-between"
                 >
-                  <span>{c.name}</span>
+                  <span>{getCategoryDisplayName(c, lang)}</span>
                   <span className="text-[10px] text-gray-400">{c.itemCount}</span>
                 </button>
               ))}
@@ -139,7 +179,7 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
             className="w-full py-2.5 px-3 rounded-xl bg-slate-900 text-white text-xs font-bold flex items-center justify-center gap-2"
           >
             <Phone className="w-4 h-4 text-rose-400" />
-            <span>কল করুন: {STORE_SETTINGS.phone}</span>
+            <span>{lang === 'en' ? `Call Us: ${STORE_SETTINGS.phone}` : `কল করুন: ${STORE_SETTINGS.phone}`}</span>
           </a>
 
           <button
@@ -147,10 +187,10 @@ export const MobileDrawer: React.FC<MobileDrawerProps> = ({
               onOpenAdmin();
               onClose();
             }}
-            className="w-full py-2 px-3 rounded-xl border border-rose-300 text-rose-600 bg-rose-50 text-[11px] font-bold flex items-center justify-center gap-1.5"
+            className="w-full py-2 px-3 rounded-xl border border-rose-300 text-rose-600 bg-rose-50 text-[11px] font-bold flex items-center justify-center gap-1.5 cursor-pointer"
           >
             <UserCheck className="w-3.5 h-3.5" />
-            <span>Laravel Merchant Admin</span>
+            <span>{t.shopAdmin}</span>
           </button>
         </div>
 

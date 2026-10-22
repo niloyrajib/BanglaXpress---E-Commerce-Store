@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
-import { X, Star, ShoppingCart, Zap, ShieldCheck, Truck, RotateCcw, Check, Heart, Share2, Sliders, FileText, Sparkles } from 'lucide-react';
+import { X, Star, ShoppingCart, Zap, ShieldCheck, Truck, RotateCcw, Check, Heart, Share2, Sliders, FileText, Sparkles, Palette } from 'lucide-react';
 import { Product } from '../types';
 import { STORE_SETTINGS } from '../data/mockData';
+import { TRANSLATIONS, getProductTitle, getProductDescription } from '../utils/translations';
+import { getColorHex, isLightColor } from '../utils/colorUtils';
+import { ProductReviewCarousel } from './ProductReviewCarousel';
 
 interface ProductQuickViewModalProps {
   product: Product | null;
@@ -11,6 +14,7 @@ interface ProductQuickViewModalProps {
   isWishlisted: boolean;
   onToggleWishlist: (product: Product) => void;
   onSelectCategory?: (category: string) => void;
+  lang?: 'en' | 'bn';
 }
 
 export const ProductQuickViewModal: React.FC<ProductQuickViewModalProps> = ({
@@ -20,11 +24,31 @@ export const ProductQuickViewModal: React.FC<ProductQuickViewModalProps> = ({
   onFastBuyNow,
   isWishlisted,
   onToggleWishlist,
-  onSelectCategory
+  onSelectCategory,
+  lang = 'bn'
 }) => {
   if (!product) return null;
+  const t = TRANSLATIONS[lang];
 
   const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>(() => {
+    const init: Record<string, string> = {};
+    if (product.options && product.options.length > 0) {
+      product.options.forEach((opt) => {
+        if (opt.values && opt.values.length > 0) {
+          init[opt.name] = opt.values[0];
+        }
+      });
+    }
+    if (product.colors && product.colors.length > 0 && !init['Color']) {
+      init['Color'] = product.colors[0].name;
+    }
+    if (product.sizes && product.sizes.length > 0 && !init['Size']) {
+      init['Size'] = product.sizes[0];
+    }
+    return init;
+  });
+
   const [selectedColor, setSelectedColor] = useState<string | undefined>(
     product.colors && product.colors.length > 0 ? product.colors[0].name : undefined
   );
@@ -33,7 +57,39 @@ export const ProductQuickViewModal: React.FC<ProductQuickViewModalProps> = ({
   );
   const [quantity, setQuantity] = useState(1);
   const [copiedLink, setCopiedLink] = useState(false);
-  const [bottomTab, setBottomTab] = useState<'specs' | 'desc' | 'warranty'>('specs');
+  const [bottomTab, setBottomTab] = useState<'specs' | 'desc' | 'warranty' | 'reviews'>('specs');
+
+  // Match active variant
+  const activeVariant = React.useMemo(() => {
+    if (!product.variants || product.variants.length === 0) return null;
+    return (
+      product.variants.find((v) => {
+        if (!v.options) return false;
+        return Object.entries(selectedOptions).every(([optName, optVal]) => {
+          const matchKey = Object.keys(v.options).find(
+            (k) => k.toLowerCase() === optName.toLowerCase()
+          );
+          if (!matchKey) return true;
+          return v.options[matchKey] === optVal;
+        });
+      }) || product.variants[0]
+    );
+  }, [product.variants, selectedOptions]);
+
+  const currentPrice = activeVariant?.price ?? product.price;
+  const currentOriginalPrice = activeVariant?.compareAtPrice ?? product.originalPrice;
+  const currentSavings = Math.max(0, currentOriginalPrice - currentPrice);
+  const currentDiscountPercent =
+    currentOriginalPrice > currentPrice
+      ? Math.round(((currentOriginalPrice - currentPrice) / currentOriginalPrice) * 100)
+      : product.discountPercent;
+  const currentStock = activeVariant?.inventory ?? product.stockCount;
+
+  const handleSelectOption = (optName: string, val: string) => {
+    setSelectedOptions((prev) => ({ ...prev, [optName]: val }));
+    if (optName.toLowerCase() === 'color') setSelectedColor(val);
+    if (optName.toLowerCase() === 'size') setSelectedSize(val);
+  };
 
   const handleShare = () => {
     navigator.clipboard.writeText(window.location.href);
@@ -41,7 +97,7 @@ export const ProductQuickViewModal: React.FC<ProductQuickViewModalProps> = ({
     setTimeout(() => setCopiedLink(false), 2000);
   };
 
-  const savings = product.originalPrice - product.price;
+  const savings = currentSavings;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
@@ -108,6 +164,10 @@ export const ProductQuickViewModal: React.FC<ProductQuickViewModalProps> = ({
                   <ShieldCheck className="w-4 h-4 text-sky-600" />
                   <span>ওয়ারেন্টি: {product.warranty}</span>
                 </div>
+                <div className="flex items-center gap-2 pt-1 border-t border-slate-200 text-emerald-800 font-semibold">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>অরিজিনাল সকল প্রোডাক্ট ডেলিভারির সময় চেক করে দেখে মূল্য পরিশোধ করুন।</span>
+                </div>
               </div>
 
             </div>
@@ -151,14 +211,12 @@ export const ProductQuickViewModal: React.FC<ProductQuickViewModalProps> = ({
 
                 {/* Name */}
                 <h1 className="text-lg sm:text-2xl font-bold text-gray-900 leading-snug">
-                  {product.name}
+                  {getProductTitle(product, lang)}
                 </h1>
 
-                {product.banglaName && (
-                  <p className="text-xs sm:text-sm text-gray-600 mt-1 font-medium">
-                    {product.banglaName}
-                  </p>
-                )}
+                <p className="text-xs sm:text-sm text-gray-600 mt-1 font-medium">
+                  {lang === 'bn' ? product.name : (product.banglaName || '')}
+                </p>
 
                 {/* Rating & In stock */}
                 <div className="flex items-center gap-3 mt-3 pb-3 border-b border-gray-100 flex-wrap">
@@ -205,45 +263,212 @@ export const ProductQuickViewModal: React.FC<ProductQuickViewModalProps> = ({
                 {/* Pricing Box */}
                 <div className="mt-4 p-3.5 bg-rose-50/50 rounded-xl border border-rose-100 flex items-baseline gap-3 flex-wrap">
                   <span className="text-2xl sm:text-3xl font-black text-rose-600">
-                    ৳{product.price.toLocaleString()}
+                    ৳{currentPrice.toLocaleString()}
                   </span>
-                  <span className="text-sm sm:text-base text-gray-400 line-through">
-                    ৳{product.originalPrice.toLocaleString()}
-                  </span>
-                  <span className="px-2 py-0.5 rounded text-xs font-bold bg-rose-600 text-white">
-                    -{product.discountPercent}% ছাড়
-                  </span>
-                  <span className="text-xs text-emerald-800 font-bold bg-emerald-100 px-2 py-0.5 rounded ml-auto">
-                    আপনার সাশ্রয় ৳{savings.toLocaleString()}!
-                  </span>
+                  {currentOriginalPrice > currentPrice && (
+                    <span className="text-sm sm:text-base text-gray-400 line-through">
+                      ৳{currentOriginalPrice.toLocaleString()}
+                    </span>
+                  )}
+                  {currentDiscountPercent > 0 && (
+                    <span className="px-2 py-0.5 rounded text-xs font-bold bg-rose-600 text-white">
+                      -{currentDiscountPercent}% ছাড়
+                    </span>
+                  )}
+                  {currentSavings > 0 && (
+                    <span className="text-xs text-emerald-800 font-bold bg-emerald-100 px-2 py-0.5 rounded ml-auto">
+                      আপনার সাশ্রয় ৳{currentSavings.toLocaleString()}!
+                    </span>
+                  )}
                 </div>
 
-                {/* Color Variations */}
-                {product.colors && product.colors.length > 0 && (
-                  <div className="mt-4">
-                    <label className="text-xs font-bold text-gray-700 block mb-1.5">
-                      কালার সিলেক্ট করুন (Color): <span className="text-rose-600 font-semibold">{selectedColor}</span>
-                    </label>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {product.colors.map((c) => (
-                        <button
-                          key={c.name}
-                          onClick={() => setSelectedColor(c.name)}
-                          className={`px-3 py-1.5 rounded-lg border text-xs font-medium flex items-center gap-2 transition-all ${
-                            selectedColor === c.name
-                              ? 'border-rose-600 bg-rose-50 text-rose-700 ring-2 ring-rose-200'
-                              : 'border-gray-200 hover:border-gray-300 text-gray-700'
-                          }`}
-                        >
-                          <span
-                            className="w-3.5 h-3.5 rounded-full border border-gray-300"
-                            style={{ backgroundColor: c.hex }}
-                          />
-                          <span>{c.name}</span>
-                        </button>
+                {/* Key Features Spotlight */}
+                {((product.features && product.features.length > 0) || (product.categoryMetafields?.features && product.categoryMetafields.features.length > 0)) && (
+                  <div className="mt-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                    <span className="font-bold text-gray-800 flex items-center gap-1.5 mb-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                      <span>{lang === 'en' ? 'Key Features:' : 'প্রধান সুবিধাসমূহ:'}</span>
+                    </span>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {(product.features || product.categoryMetafields?.features || []).slice(0, 4).map((f, i) => (
+                        <div key={i} className="flex items-center gap-1 text-[11px] text-gray-700 bg-white px-2 py-1 rounded border border-gray-200">
+                          <Check className="w-3 h-3 text-emerald-600 shrink-0" />
+                          <span className="truncate">{f}</span>
+                        </div>
                       ))}
                     </div>
                   </div>
+                )}
+
+                {/* Dynamic Options or Fallback Color & Size */}
+                {product.options && product.options.length > 0 ? (
+                  <div className="mt-4 space-y-4">
+                    {product.options.map((opt) => {
+                      const isColor =
+                        opt.name.toLowerCase() === 'color' ||
+                        opt.name.toLowerCase() === 'colour' ||
+                        opt.name === 'কালার' ||
+                        opt.name.toLowerCase().includes('color');
+                      const selectedVal = selectedOptions[opt.name] || opt.values[0];
+                      const selectedHex = isColor ? getColorHex(selectedVal, product.colors) : '';
+
+                      if (isColor) {
+                        return (
+                          <div key={opt.id || opt.name} className="space-y-2">
+                            <label className="text-xs font-bold text-gray-800 flex items-center justify-between flex-wrap gap-2">
+                              <span className="flex items-center gap-1.5">
+                                <Palette className="w-4 h-4 text-rose-600" />
+                                <span>{opt.name}:</span>
+                                <span className="text-gray-900 font-extrabold text-sm ml-1">{selectedVal}</span>
+                              </span>
+                              <span className="inline-flex items-center gap-1.5 font-mono text-xs font-bold px-2 py-0.5 rounded-md bg-gray-50 border border-gray-200 text-gray-800 shadow-2xs">
+                                <span
+                                  className="w-2.5 h-2.5 rounded-full border border-black/20 shadow-xs"
+                                  style={{ backgroundColor: selectedHex }}
+                                />
+                                <span>{selectedHex}</span>
+                              </span>
+                            </label>
+
+                            <div className="flex items-center gap-3 flex-wrap pt-0.5">
+                              {opt.values.map((val) => {
+                                const isSelected = selectedVal.toLowerCase() === val.toLowerCase();
+                                const hex = getColorHex(val, product.colors);
+                                const isLight = isLightColor(hex);
+
+                                return (
+                                  <button
+                                    key={val}
+                                    type="button"
+                                    onClick={() => {
+                                      handleSelectOption(opt.name, val);
+                                      setSelectedColor(val);
+                                    }}
+                                    title={`${val} (${hex})`}
+                                    aria-label={`Color ${val} - ${hex}`}
+                                    className="group relative flex flex-col items-center gap-1 focus:outline-none cursor-pointer"
+                                  >
+                                    <div
+                                      className={`relative w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-all duration-200 ${
+                                        isSelected
+                                          ? 'ring-3 ring-rose-600 ring-offset-2 ring-offset-white shadow-md scale-105'
+                                          : 'ring-1 ring-black/15 hover:ring-2 hover:ring-gray-400 hover:ring-offset-2 hover:scale-105 shadow-2xs'
+                                      }`}
+                                      style={{ backgroundColor: hex }}
+                                    >
+                                      <span className="absolute inset-0 rounded-full border border-black/10 pointer-events-none" />
+                                      {isSelected && (
+                                        <Check
+                                          className={`w-3.5 h-3.5 stroke-[3] transition-transform duration-200 ${
+                                            isLight ? 'text-gray-900' : 'text-white'
+                                          }`}
+                                        />
+                                      )}
+                                    </div>
+                                    <span
+                                      className={`text-[11px] max-w-[70px] truncate text-center leading-tight ${
+                                        isSelected ? 'font-bold text-gray-900' : 'font-medium text-gray-700'
+                                      }`}
+                                    >
+                                      {val}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div key={opt.id || opt.name}>
+                          <label className="text-xs font-bold text-gray-700 block mb-1.5">
+                            {opt.name}: <span className="text-rose-600 font-semibold">{selectedVal}</span>
+                          </label>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {opt.values.map((val) => {
+                              const isSelected = selectedVal === val;
+                              return (
+                                <button
+                                  key={val}
+                                  type="button"
+                                  onClick={() => handleSelectOption(opt.name, val)}
+                                  className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-all cursor-pointer ${
+                                    isSelected
+                                      ? 'border-rose-600 bg-rose-50 text-rose-700 ring-2 ring-rose-200 shadow-2xs'
+                                      : 'border-gray-200 hover:border-gray-300 text-gray-700 hover:bg-gray-50'
+                                  }`}
+                                >
+                                  {val}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <>
+                    {/* Color Variations */}
+                    {product.colors && product.colors.length > 0 && (
+                      <div className="mt-4 space-y-2">
+                        <label className="text-xs font-bold text-gray-800 flex items-center justify-between flex-wrap gap-2">
+                          <span className="flex items-center gap-1.5">
+                            <Palette className="w-4 h-4 text-rose-600" />
+                            <span>{lang === 'en' ? 'Select Color:' : 'কালার সিলেক্ট করুন (Color):'}</span>
+                            <span className="text-gray-900 font-extrabold text-sm ml-1">{selectedColor}</span>
+                          </span>
+                        </label>
+                        <div className="flex items-center gap-3 flex-wrap pt-0.5">
+                          {product.colors.map((c) => {
+                            const isSelected = selectedColor === c.name;
+                            const hex = c.hex ? c.hex.toUpperCase() : getColorHex(c.name, product.colors);
+                            const isLight = isLightColor(hex);
+
+                            return (
+                              <button
+                                key={c.name}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedColor(c.name);
+                                  handleSelectOption('Color', c.name);
+                                }}
+                                title={c.name}
+                                aria-label={`Color ${c.name}`}
+                                className="group relative flex flex-col items-center gap-1 focus:outline-none cursor-pointer"
+                              >
+                                <div
+                                  className={`relative w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center transition-all duration-200 ${
+                                    isSelected
+                                      ? 'ring-3 ring-rose-600 ring-offset-2 ring-offset-white shadow-md scale-105'
+                                      : 'ring-1 ring-black/15 hover:ring-2 hover:ring-gray-400 hover:ring-offset-2 hover:scale-105 shadow-2xs'
+                                  }`}
+                                  style={{ backgroundColor: hex }}
+                                >
+                                  <span className="absolute inset-0 rounded-full border border-black/10 pointer-events-none" />
+                                  {isSelected && (
+                                    <Check
+                                      className={`w-3.5 h-3.5 stroke-[3] transition-transform duration-200 ${
+                                        isLight ? 'text-gray-900' : 'text-white'
+                                      }`}
+                                    />
+                                  )}
+                                </div>
+                                <span
+                                  className={`text-[11px] max-w-[70px] truncate text-center leading-tight ${
+                                    isSelected ? 'font-bold text-gray-900' : 'font-medium text-gray-700'
+                                  }`}
+                                >
+                                  {c.name}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
 
                 {/* Quantity */}
@@ -251,8 +476,9 @@ export const ProductQuickViewModal: React.FC<ProductQuickViewModalProps> = ({
                   <label className="text-xs font-bold text-gray-700">পরিমাণ (Quantity):</label>
                   <div className="flex items-center border border-gray-300 rounded-xl overflow-hidden bg-white shadow-xs">
                     <button
+                      type="button"
                       onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                      className="px-3 py-1 text-base font-bold text-gray-600 hover:bg-gray-100 transition-colors"
+                      className="px-3 py-1 text-base font-bold text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer"
                     >
                       -
                     </button>
@@ -260,28 +486,29 @@ export const ProductQuickViewModal: React.FC<ProductQuickViewModalProps> = ({
                       {quantity}
                     </span>
                     <button
-                      onClick={() => setQuantity(Math.min(product.stockCount, quantity + 1))}
-                      className="px-3 py-1 text-base font-bold text-gray-600 hover:bg-gray-100 transition-colors"
+                      type="button"
+                      onClick={() => setQuantity(Math.min(currentStock, quantity + 1))}
+                      className="px-3 py-1 text-base font-bold text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer"
                     >
                       +
                     </button>
                   </div>
                   <span className="text-xs text-gray-400">
-                    মোট: <strong>৳{(product.price * quantity).toLocaleString()}</strong>
+                    মোট: <strong>৳{(currentPrice * quantity).toLocaleString()}</strong>
                   </span>
                 </div>
 
                 {/* Short Specs / Features */}
                 <div className="mt-4">
                   <p className="text-xs text-gray-600 leading-relaxed line-clamp-2">
-                    {product.banglaDescription || product.shortDescription}
+                    {getProductDescription(product, lang)}
                   </p>
                 </div>
 
                 {/* Tags */}
                 {product.tags && product.tags.length > 0 && (
                   <div className="mt-3 flex items-center gap-1.5 flex-wrap">
-                    <span className="text-[11px] font-semibold text-gray-500">ট্যাগস:</span>
+                    <span className="text-[11px] font-semibold text-gray-500">{lang === 'en' ? 'Tags:' : 'ট্যাগস:'}</span>
                     {product.tags.map((tag, idx) => (
                       <span
                         key={idx}
@@ -299,25 +526,39 @@ export const ProductQuickViewModal: React.FC<ProductQuickViewModalProps> = ({
                 <button
                   id="modal-add-to-cart-btn"
                   onClick={() => {
-                    onAddToCart(product, quantity, selectedColor, selectedSize);
+                    const customizedProduct: Product = {
+                      ...product,
+                      price: currentPrice,
+                      originalPrice: currentOriginalPrice,
+                      sku: activeVariant?.sku || product.sku,
+                      stockCount: currentStock
+                    };
+                    onAddToCart(customizedProduct, quantity, selectedColor, selectedSize);
                     onClose();
                   }}
                   className="flex-1 py-3 px-4 rounded-xl border-2 border-rose-600 text-rose-600 hover:bg-rose-50 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer"
                 >
                   <ShoppingCart className="w-4 h-4" />
-                  <span>কার্টে যোগ করুন</span>
+                  <span>{t.addToCart}</span>
                 </button>
 
                 <button
                   id="modal-order-now-btn"
                   onClick={() => {
-                    onFastBuyNow(product, quantity, selectedColor, selectedSize);
+                    const customizedProduct: Product = {
+                      ...product,
+                      price: currentPrice,
+                      originalPrice: currentOriginalPrice,
+                      sku: activeVariant?.sku || product.sku,
+                      stockCount: currentStock
+                    };
+                    onFastBuyNow(customizedProduct, quantity, selectedColor, selectedSize);
                     onClose();
                   }}
                   className="flex-1 py-3 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs sm:text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-rose-600/30 hover:shadow-rose-600/50 transition-all cursor-pointer animate-pulse"
                 >
                   <Zap className="w-4 h-4 fill-white" />
-                  <span>সরাসরি অর্ডার করুন (ক্যাশ অন ডেলিভারি)</span>
+                  <span>{lang === 'en' ? 'Order Now (Cash on Delivery)' : 'সরাসরি অর্ডার করুন (ক্যাশ অন ডেলিভারি)'}</span>
                 </button>
               </div>
 
@@ -325,19 +566,22 @@ export const ProductQuickViewModal: React.FC<ProductQuickViewModalProps> = ({
 
           </div>
 
-          {/* Bottom Tabs: Specifications, Description, Warranty */}
+          {/* Customer Reviews Spotlight Carousel */}
+          <ProductReviewCarousel product={product} lang={lang} />
+
+          {/* Bottom Tabs: Specifications, Description, Warranty, Reviews */}
           <div className="mt-8 pt-6 border-t border-gray-200">
             <div className="flex items-center gap-2 border-b border-gray-200 pb-px overflow-x-auto">
               <button
                 onClick={() => setBottomTab('specs')}
-                className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold border-b-2 whitespace-nowrap transition-all ${
+                className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold border-b-2 whitespace-nowrap transition-all cursor-pointer ${
                   bottomTab === 'specs'
                     ? 'border-rose-600 text-rose-600'
                     : 'border-transparent text-gray-500 hover:text-gray-900'
                 }`}
               >
                 <Sliders className="w-3.5 h-3.5" />
-                <span>স্পেসিফিকেশন (Specifications)</span>
+                <span>{lang === 'en' ? 'Specifications' : 'স্পেসিফিকেশন (Specifications)'}</span>
                 {product.specifications && Object.keys(product.specifications).length > 0 && (
                   <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-gray-100 text-gray-600 font-mono">
                     {Object.keys(product.specifications).length}
@@ -347,26 +591,41 @@ export const ProductQuickViewModal: React.FC<ProductQuickViewModalProps> = ({
 
               <button
                 onClick={() => setBottomTab('desc')}
-                className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold border-b-2 whitespace-nowrap transition-all ${
+                className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold border-b-2 whitespace-nowrap transition-all cursor-pointer ${
                   bottomTab === 'desc'
                     ? 'border-rose-600 text-rose-600'
                     : 'border-transparent text-gray-500 hover:text-gray-900'
                 }`}
               >
                 <FileText className="w-3.5 h-3.5" />
-                <span>বিস্তারিত বিবরণ ও ফিচার্স</span>
+                <span>{lang === 'en' ? 'Description & Highlights' : 'বিস্তারিত বিবরণ ও ফিচার্স'}</span>
               </button>
 
               <button
                 onClick={() => setBottomTab('warranty')}
-                className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold border-b-2 whitespace-nowrap transition-all ${
+                className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold border-b-2 whitespace-nowrap transition-all cursor-pointer ${
                   bottomTab === 'warranty'
                     ? 'border-rose-600 text-rose-600'
                     : 'border-transparent text-gray-500 hover:text-gray-900'
                 }`}
               >
                 <ShieldCheck className="w-3.5 h-3.5" />
-                <span>ওয়ারেন্টি ও পলিসি</span>
+                <span>{lang === 'en' ? 'Warranty & Policies' : 'ওয়ারেন্টি ও পলিসি'}</span>
+              </button>
+
+              <button
+                onClick={() => setBottomTab('reviews')}
+                className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold border-b-2 whitespace-nowrap transition-all cursor-pointer ${
+                  bottomTab === 'reviews'
+                    ? 'border-rose-600 text-rose-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-900'
+                }`}
+              >
+                <Star className="w-3.5 h-3.5 fill-rose-600 text-rose-600" />
+                <span>{lang === 'en' ? 'Customer Reviews' : 'কাস্টমার রিভিউ'}</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-rose-100 text-rose-700 font-mono">
+                  {product.rating || 4.9}★
+                </span>
               </button>
             </div>
 
@@ -464,6 +723,60 @@ export const ProductQuickViewModal: React.FC<ProductQuickViewModalProps> = ({
                     <p className="text-slate-700 font-medium">ঢাকা: ৬০৳ | বাইরে: ১২০৳</p>
                     <p className="text-[11px] text-slate-500 mt-1">ডেলিভারিম্যানের সামনে চেক করার সুযোগ</p>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* Tab 4: Customer Reviews Details */}
+            {bottomTab === 'reviews' && (
+              <div className="py-4 animate-in fade-in duration-150 space-y-4">
+                <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="text-center sm:text-left">
+                    <span className="text-4xl sm:text-5xl font-black text-amber-500 font-mono">
+                      {product.rating || 4.9}
+                    </span>
+                    <div className="flex items-center gap-1 mt-1 justify-center sm:justify-start">
+                      {[...Array(5)].map((_, i) => (
+                        <Star key={i} className="w-4 h-4 fill-amber-400 text-amber-400" />
+                      ))}
+                    </div>
+                    <span className="text-xs text-gray-500 font-medium mt-1 block">
+                      {lang === 'en' ? `Based on ${product.reviewCount || 128} verified reviews` : `সর্বমোট ${product.reviewCount || 128} জন ভেরিফাইড ক্রেতার মতামত`}
+                    </span>
+                  </div>
+
+                  <div className="flex-1 max-w-xs w-full space-y-1.5 text-xs text-gray-600">
+                    <div className="flex items-center gap-2">
+                      <span className="w-12 font-semibold">৫ স্টার</span>
+                      <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div className="h-full bg-amber-400 w-[92%]" />
+                      </div>
+                      <span className="font-mono text-[11px]">92%</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="w-12 font-semibold">৪ স্টার</span>
+                      <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div className="h-full bg-amber-400 w-[7%]" />
+                      </div>
+                      <span className="font-mono text-[11px]">7%</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="w-12 font-semibold">৩ স্টার</span>
+                      <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div className="h-full bg-amber-400 w-[1%]" />
+                      </div>
+                      <span className="font-mono text-[11px]">1%</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-white rounded-xl border border-gray-200 text-xs text-gray-600 flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>
+                    {lang === 'en'
+                      ? 'All reviews displayed in the carousel above are from verified customers who purchased this item on BanglaXpress.'
+                      : 'উপরের ক্যারোসেলের সকল রিভিউ ও রেটিং BanglaXpress থেকে পণ্য ক্রয়কারী ভেরিফাইড গ্রাহকদের দ্বারা প্রদত্ত।'}
+                  </span>
                 </div>
               </div>
             )}

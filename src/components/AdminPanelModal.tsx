@@ -8,6 +8,7 @@ import {
   Truck,
   Search,
   CheckCircle,
+  CheckCircle2,
   Clock,
   AlertTriangle,
   Plus,
@@ -28,9 +29,11 @@ import {
   Eye,
   Bell,
   Store,
-  DownloadCloud
+  DownloadCloud,
+  ExternalLink,
+  Printer
 } from 'lucide-react';
-import { Order, OrderStatus, Product, ThemeConfig } from '../types';
+import { Order, OrderStatus, Product, ThemeConfig, Coupon } from '../types';
 import { AdminLogin } from './Admin/AdminLogin';
 import { ShopifyProductEditor } from './Admin/ShopifyProductEditor';
 import { BulkProductImportModal } from './Admin/BulkProductImportModal';
@@ -55,9 +58,15 @@ import { ShopifyAppsView } from './Admin/views/ShopifyAppsView';
 import { ShopifySidekickView } from './Admin/views/ShopifySidekickModal';
 import { ShopifySettingsView } from './Admin/views/ShopifySettingsView';
 import { ShopifyVendorPaymentsView } from './Admin/views/ShopifyVendorPaymentsView';
+import { ShopifyBillingView } from './Admin/views/ShopifyBillingView';
 import { ShopifyDropshipImportView } from './Admin/views/ShopifyDropshipImportView';
 import { ShopifyThemeCustomizer } from './Admin/views/ShopifyThemeCustomizer';
 import { FooterSettingsEditor } from './Admin/views/FooterSettingsEditor';
+import { ShopifySEOGeneratorView } from './Admin/views/ShopifySEOGeneratorView';
+import { ShopifyAbandonedCheckoutsView } from './Admin/views/ShopifyAbandonedCheckoutsView';
+import { ShopifyOrderDetailView } from './Admin/views/ShopifyOrderDetailView';
+import { OrderConfirmationModal } from './OrderConfirmationModal';
+import { getStoredAbandonedCarts } from '../utils/abandonedCartManager';
 import { DEFAULT_THEME_CONFIG } from '../data/defaultThemeConfig';
 
 interface AdminPanelModalProps {
@@ -65,6 +74,7 @@ interface AdminPanelModalProps {
   onClose: () => void;
   orders: Order[];
   onUpdateOrderStatus: (orderId: string, newStatus: OrderStatus) => void;
+  onUpdateOrder?: (updatedOrder: Order) => void;
   products: Product[];
   onAddNewProduct: (product: Product) => void;
   onUpdateProduct: (product: Product) => void;
@@ -73,6 +83,11 @@ interface AdminPanelModalProps {
   onBulkImportProducts?: (products: Product[], replaceExisting: boolean) => void;
   themeConfig?: ThemeConfig;
   onSaveTheme?: (updatedTheme: ThemeConfig) => void;
+  coupons?: Coupon[];
+  onAddCoupon?: (newCoupon: Coupon) => void;
+  onUpdateCoupon?: (updatedCoupon: Coupon) => void;
+  onDeleteCoupon?: (code: string) => void;
+  onSelectCategory?: (category: string) => void;
 }
 
 export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
@@ -80,6 +95,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   onClose,
   orders,
   onUpdateOrderStatus,
+  onUpdateOrder,
   products,
   onAddNewProduct,
   onUpdateProduct,
@@ -87,7 +103,12 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   onResetDefaultProducts,
   onBulkImportProducts,
   themeConfig,
-  onSaveTheme
+  onSaveTheme,
+  coupons,
+  onAddCoupon,
+  onUpdateCoupon,
+  onDeleteCoupon,
+  onSelectCategory
 }) => {
   // Authentication State
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
@@ -118,11 +139,26 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
   const [globalSearch, setGlobalSearch] = useState('');
   const [orderSearchQuery, setOrderSearchQuery] = useState('');
   const [orderFilterStatus, setOrderFilterStatus] = useState<string>('all');
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [viewingReceiptOrder, setViewingReceiptOrder] = useState<Order | null>(null);
   const [productSearchQuery, setProductSearchQuery] = useState('');
   const [productCategoryFilter, setProductCategoryFilter] = useState('all');
   const [isBulkImportOpen, setIsBulkImportOpen] = useState(false);
   const [isDropshipModalOpen, setIsDropshipModalOpen] = useState(false);
   const [notificationToast, setNotificationToast] = useState<string | null>(null);
+  const [abandonedCartsCount, setAbandonedCartsCount] = useState<number>(() => {
+    return getStoredAbandonedCarts().filter((c) => c.recoveryStatus === 'unrecovered').length;
+  });
+
+  useEffect(() => {
+    const handleCartsUpdate = () => {
+      setAbandonedCartsCount(
+        getStoredAbandonedCarts().filter((c) => c.recoveryStatus === 'unrecovered').length
+      );
+    };
+    window.addEventListener('abandoned_carts_updated', handleCartsUpdate);
+    return () => window.removeEventListener('abandoned_carts_updated', handleCartsUpdate);
+  }, []);
 
   const showToast = (msg: string) => {
     setNotificationToast(msg);
@@ -206,6 +242,32 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
         inStock: newStock > 0
       });
     }
+  };
+
+  // Quick mark order as delivered
+  const handleQuickMarkOrderDelivered = (ord: Order) => {
+    const wasUnpaid = ord.paymentStatus !== 'paid';
+    const updated: Order = {
+      ...ord,
+      status: 'delivered',
+      paymentStatus: 'paid', // Cash on Delivery collected upon handover
+      timeline: [
+        {
+          status: 'delivered',
+          title: 'Order Delivered & Cash Collected',
+          description: `Package successfully delivered to ${ord.customerName} via ${ord.courierName || 'Courier'}.${wasUnpaid ? ` Total ৳${ord.total.toLocaleString()}.00 collected via Cash on Delivery.` : ''}`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          completed: true
+        },
+        ...ord.timeline
+      ]
+    };
+
+    onUpdateOrderStatus(ord.id, 'delivered');
+    if (onUpdateOrder) {
+      onUpdateOrder(updated);
+    }
+    showToast(`অর্ডার #${ord.id.replace('#', '')} সফলভাবে Delivered হিসেবে চিহ্নিত হয়েছে!`);
   };
 
   // Filtered orders
@@ -356,6 +418,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                 }}
                 ordersCount={orders.length}
                 productsCount={products.length}
+                abandonedCount={abandonedCartsCount}
                 isMobileOpen={isMobileSidebarOpen}
                 onCloseMobile={() => setIsMobileSidebarOpen(false)}
               />
@@ -386,11 +449,24 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                         products={products}
                         onNavigate={(tab) => setActiveTab(tab)}
                         onOpenNewProduct={handleOpenNewProductEditor}
+                        onSelectOrder={(orderId) => {
+                          setSelectedOrderId(orderId);
+                          setActiveTab('orders');
+                        }}
                       />
                     )}
 
                     {/* VIEW 2: ORDERS */}
                     {activeTab === 'orders' && (
+                      selectedOrderId && orders.find((o) => o.id === selectedOrderId) ? (
+                        <ShopifyOrderDetailView
+                          order={orders.find((o) => o.id === selectedOrderId)!}
+                          onBack={() => setSelectedOrderId(null)}
+                          onUpdateOrderStatus={onUpdateOrderStatus}
+                          onUpdateOrder={onUpdateOrder}
+                          showToast={showToast}
+                        />
+                      ) : (
                       <div className="space-y-4 max-w-6xl mx-auto">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-5 rounded-xl border border-gray-200 shadow-xs">
                           <div>
@@ -458,12 +534,13 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                                 <th className="p-3.5">Payment</th>
                                 <th className="p-3.5">Courier</th>
                                 <th className="p-3.5">Fulfillment Status</th>
+                                <th className="p-3.5 text-center">মানি রিসিট</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100 font-medium">
                               {filteredOrders.length === 0 ? (
                                 <tr>
-                                  <td colSpan={7} className="p-8 text-center text-gray-400">
+                                  <td colSpan={8} className="p-8 text-center text-gray-400">
                                     No orders found matching this filter
                                   </td>
                                 </tr>
@@ -471,13 +548,28 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                                 filteredOrders.map((ord) => (
                                   <tr key={ord.id} className="hover:bg-gray-50/80 transition-colors">
                                     <td className="p-3.5">
-                                      <span className="font-bold font-mono text-gray-900 block">{ord.id}</span>
-                                      <span className="text-[10px] text-gray-400">{ord.createdAt}</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => setSelectedOrderId(ord.id)}
+                                        className="font-bold font-mono text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1.5 cursor-pointer text-left group"
+                                        title="অর্ডার ডিটেইলস দেখুন"
+                                      >
+                                        <span>{ord.id.startsWith('#') ? ord.id : `#${ord.id}`}</span>
+                                        <ExternalLink className="w-3 h-3 text-blue-500 opacity-60 group-hover:opacity-100 transition-opacity" />
+                                      </button>
+                                      <span className="text-[10px] text-gray-400 block mt-0.5">{ord.createdAt}</span>
                                     </td>
 
                                     <td className="p-3.5">
-                                      <span className="font-bold text-gray-900 block">{ord.customerName}</span>
-                                      <span className="font-mono text-[11px] text-gray-500">{ord.phone}</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => setSelectedOrderId(ord.id)}
+                                        className="font-bold text-gray-900 hover:text-blue-600 hover:underline block text-left cursor-pointer"
+                                        title="অর্ডার ডিটেইলস দেখুন"
+                                      >
+                                        {ord.customerName}
+                                      </button>
+                                      <span className="font-mono text-[11px] text-gray-500 block">{ord.phone}</span>
                                       <span className="text-[10.5px] text-gray-400 block truncate max-w-[150px]">
                                         {ord.address}
                                       </span>
@@ -521,20 +613,60 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                                     </td>
 
                                     <td className="p-3.5">
-                                      <select
-                                        value={ord.status}
-                                        onChange={(e) =>
-                                          onUpdateOrderStatus(ord.id, e.target.value as OrderStatus)
-                                        }
-                                        className="text-xs font-bold px-2 py-1.5 rounded-lg border border-gray-300 bg-white shadow-xs outline-none focus:border-gray-900 cursor-pointer"
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <select
+                                          value={ord.status}
+                                          onChange={(e) =>
+                                            onUpdateOrderStatus(ord.id, e.target.value as OrderStatus)
+                                          }
+                                          className="text-xs font-bold px-2 py-1.5 rounded-lg border border-gray-300 bg-white shadow-xs outline-none focus:border-gray-900 cursor-pointer"
+                                        >
+                                          <option value="pending">Pending (অপেক্ষমান)</option>
+                                          <option value="confirmed">Confirmed (নিশ্চিত)</option>
+                                          <option value="processing">Processing (প্যাকিং)</option>
+                                          <option value="shipped">Shipped (কুরিয়ারে)</option>
+                                          <option value="delivered">Delivered (ডেলিভার্ড)</option>
+                                          <option value="cancelled">Cancelled (বাতিল)</option>
+                                        </select>
+
+                                        {ord.status !== 'delivered' ? (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleQuickMarkOrderDelivered(ord)}
+                                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-300 transition-colors cursor-pointer shadow-2xs whitespace-nowrap"
+                                            title="Mark as Delivered"
+                                          >
+                                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                            <span>Mark Delivered</span>
+                                          </button>
+                                        ) : (
+                                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 whitespace-nowrap">
+                                            <Check className="w-3 h-3 text-emerald-700" />
+                                            <span>Delivered</span>
+                                          </span>
+                                        )}
+
+                                        <button
+                                          type="button"
+                                          onClick={() => setSelectedOrderId(ord.id)}
+                                          className="p-1.5 rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50 border border-gray-200 transition-colors cursor-pointer shrink-0"
+                                          title="Shopify Order Details দেখুন"
+                                        >
+                                          <ExternalLink className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
+                                    </td>
+
+                                    <td className="p-3.5 text-center">
+                                      <button
+                                        type="button"
+                                        onClick={() => setViewingReceiptOrder(ord)}
+                                        className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-300 bg-emerald-50/70 hover:bg-emerald-100 text-emerald-800 text-xs font-bold transition-all shadow-2xs cursor-pointer group whitespace-nowrap"
+                                        title="মানি রিসিট ও ক্যাশ মেমো দেখুন এবং প্রিন্ট করুন"
                                       >
-                                        <option value="pending">Pending (অপেক্ষমান)</option>
-                                        <option value="confirmed">Confirmed (নিশ্চিত)</option>
-                                        <option value="processing">Processing (প্যাকিং)</option>
-                                        <option value="shipped">Shipped (কুরিয়ারে)</option>
-                                        <option value="delivered">Delivered (ডেলিভার্ড)</option>
-                                        <option value="cancelled">Cancelled (বাতিল)</option>
-                                      </select>
+                                        <Printer className="w-3.5 h-3.5 text-emerald-700 group-hover:scale-110 transition-transform" />
+                                        <span>রিসিট</span>
+                                      </button>
                                     </td>
                                   </tr>
                                 ))
@@ -543,6 +675,14 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                           </table>
                         </div>
                       </div>
+                    ))}
+
+                    {/* VIEW: ABANDONED CHECKOUTS RECOVERY */}
+                    {activeTab === 'abandoned_checkouts' && (
+                      <ShopifyAbandonedCheckoutsView
+                        onAddCoupon={onAddCoupon}
+                        showToast={showToast}
+                      />
                     )}
 
                     {/* VIEW 3: PRODUCTS */}
@@ -765,7 +905,18 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
 
                     {/* SUB-VIEW: COLLECTIONS */}
                     {activeTab === 'collections' && (
-                      <ShopifyCollectionsView products={products} showToast={showToast} />
+                      <ShopifyCollectionsView
+                        products={products}
+                        themeConfig={themeConfig}
+                        onSaveTheme={onSaveTheme}
+                        showToast={showToast}
+                        onOpenStorefrontCategory={(cat) => {
+                          onClose();
+                          if (onSelectCategory) {
+                            onSelectCategory(cat);
+                          }
+                        }}
+                      />
                     )}
 
                     {/* SUB-VIEW: INVENTORY */}
@@ -808,7 +959,15 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                     {activeTab === 'growth' && <ShopifyGrowthView showToast={showToast} />}
 
                     {/* VIEW 6: DISCOUNTS */}
-                    {activeTab === 'discounts' && <ShopifyDiscountsView showToast={showToast} />}
+                    {activeTab === 'discounts' && (
+                      <ShopifyDiscountsView
+                        coupons={coupons}
+                        onAddCoupon={onAddCoupon}
+                        onUpdateCoupon={onUpdateCoupon}
+                        onDeleteCoupon={onDeleteCoupon}
+                        showToast={showToast}
+                      />
+                    )}
 
                     {/* VIEW 7: CONTENT */}
                     {activeTab === 'content' && <ShopifyContentView showToast={showToast} />}
@@ -829,6 +988,7 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                         onOpenStorefront={onClose}
                         onOpenThemeCustomizer={() => setActiveTab('theme_customizer')}
                         onOpenFooterEditor={() => setActiveTab('footer_settings')}
+                        onOpenSEOGenerator={() => setActiveTab('seo_generator')}
                       />
                     )}
                     {activeTab === 'theme_customizer' && (
@@ -870,6 +1030,23 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                         />
                       </div>
                     )}
+                    {activeTab === 'seo_generator' && (
+                      <div className="bg-[#f6f6f7] min-h-full pb-16 pt-2">
+                        <ShopifySEOGeneratorView
+                          themeConfig={themeConfig || DEFAULT_THEME_CONFIG}
+                          onSaveSEO={(updatedSEO) => {
+                            const updated = {
+                              ...(themeConfig || DEFAULT_THEME_CONFIG),
+                              seo: updatedSEO
+                            };
+                            if (onSaveTheme) {
+                              onSaveTheme(updated);
+                            }
+                          }}
+                          showToast={showToast}
+                        />
+                      </div>
+                    )}
                     {activeTab === 'sales_agentic' && (
                       <ShopifySalesChannelsView
                         channelType="agentic"
@@ -903,6 +1080,13 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
                     {/* VIEW 13: SETTINGS */}
                     {activeTab === 'settings' && (
                       <ShopifySettingsView showToast={showToast} products={products} />
+                    )}
+
+                    {/* VIEW: BILLING (Dedicated GPE Bangladesh Billing View) */}
+                    {activeTab === 'billing' && (
+                      <div className="bg-[#f1f2f4] min-h-[85vh] rounded-2xl border border-gray-200 p-6">
+                        <ShopifyBillingView showToast={showToast} />
+                      </div>
                     )}
 
                     {/* VIEW 14: VENDOR PAYMENT RULES */}
@@ -946,6 +1130,19 @@ export const AdminPanelModal: React.FC<AdminPanelModalProps> = ({
           }}
           showToast={showToast}
         />
+
+        {/* Money Receipt & Invoice Modal with Official BanglaXpress Logo */}
+        {viewingReceiptOrder && (
+          <OrderConfirmationModal
+            order={viewingReceiptOrder}
+            onClose={() => setViewingReceiptOrder(null)}
+            onTrackOrder={(orderId) => {
+              setViewingReceiptOrder(null);
+              setSelectedOrderId(orderId);
+              setActiveTab('orders');
+            }}
+          />
+        )}
       </div>
     </div>
   );

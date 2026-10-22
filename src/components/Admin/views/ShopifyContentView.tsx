@@ -18,20 +18,12 @@ import {
   Maximize2,
   Sparkles
 } from 'lucide-react';
+import { ShopifyMediaDetailEditor, MediaItem } from './ShopifyMediaDetailEditor';
+
+export type { MediaItem };
 
 interface ShopifyContentViewProps {
   showToast?: (message: string) => void;
-}
-
-interface MediaItem {
-  id: string;
-  name: string;
-  url: string;
-  size: string;
-  dimensions: string;
-  type: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/svg';
-  category: 'Products' | 'Banners' | 'Logos' | 'General';
-  uploadedAt: string;
 }
 
 interface StorePage {
@@ -56,6 +48,19 @@ interface StoreBanner {
 }
 
 const INITIAL_MEDIA_ITEMS: MediaItem[] = [
+  {
+    id: 'med-printer',
+    name: 'BX-miniThermalBluetoothPrinter',
+    url: 'https://images.unsplash.com/photo-1612815154858-60aa4c59eaa6?w=1254&auto=format&fit=crop&q=80',
+    size: '1.77 MB',
+    dimensions: '1254 × 1254',
+    type: 'image/png',
+    category: 'Products',
+    uploadedAt: 'Sep 25, 2026',
+    altText: 'Mini Thermal Bluetooth Printer - Small Size, Big Possibilities - BanglaXpress',
+    usedIn: 'Products (1)',
+    focalPoint: { x: 50, y: 50 }
+  },
   {
     id: 'med-1',
     name: 'smartwatch-ultra-edition.jpg',
@@ -1059,55 +1064,32 @@ export const ShopifyContentView: React.FC<ShopifyContentViewProps> = ({
         </div>
       )}
 
-      {/* Modal: Full-Screen Image Lightbox Preview */}
+      {/* Full Shopify Media Detail & Feature Editor matching user screenshot */}
       {previewMedia && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-2xl w-full overflow-hidden shadow-2xl space-y-4">
-            <div className="p-4 border-b flex items-center justify-between">
-              <div className="truncate pr-2">
-                <h3 className="font-bold text-gray-900 text-sm truncate">{previewMedia.name}</h3>
-                <span className="text-xs text-gray-500 font-mono">
-                  {previewMedia.dimensions} • {previewMedia.size} • {previewMedia.uploadedAt}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setPreviewMedia(null)}
-                className="p-1.5 text-gray-400 hover:text-gray-800 rounded-lg"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="max-h-[60vh] bg-slate-950 flex items-center justify-center p-4">
-              <img
-                src={previewMedia.url}
-                alt={previewMedia.name}
-                className="max-h-[50vh] max-w-full object-contain rounded-lg shadow-lg"
-              />
-            </div>
-
-            <div className="p-4 border-t flex items-center justify-between text-xs bg-gray-50">
-              <button
-                type="button"
-                onClick={() => handleCopyUrl(previewMedia)}
-                className="px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-white flex items-center gap-1.5 font-semibold text-gray-700"
-              >
-                <Copy className="w-3.5 h-3.5" />
-                <span>Copy Image URL</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => promptDeleteMedia(previewMedia)}
-                className="px-3 py-1.5 bg-rose-600 text-white rounded-lg hover:bg-rose-700 flex items-center gap-1.5 font-semibold shadow-xs cursor-pointer"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Delete Photo</span>
-              </button>
-            </div>
-          </div>
-        </div>
+        <ShopifyMediaDetailEditor
+          media={previewMedia}
+          onBack={() => setPreviewMedia(null)}
+          onSave={(updated) => {
+            setMediaList((prev) => {
+              const nextList = prev.map((m) => (m.id === updated.id ? updated : m));
+              persistMedia(nextList);
+              return nextList;
+            });
+            setPreviewMedia(updated);
+            showToast(`"${updated.name}" সফলভাবে আপডেট করা হয়েছে!`);
+          }}
+          onDelete={(id) => {
+            setMediaList((prev) => {
+              const nextList = prev.filter((m) => m.id !== id);
+              persistMedia(nextList);
+              return nextList;
+            });
+            setSelectedMediaIds((prev) => prev.filter((i) => i !== id));
+            setPreviewMedia(null);
+            showToast('ছবি সফলভাবে মুছে ফেলা হয়েছে!');
+          }}
+          showToast={showToast}
+        />
       )}
 
       {/* Modal: Add Media via URL */}

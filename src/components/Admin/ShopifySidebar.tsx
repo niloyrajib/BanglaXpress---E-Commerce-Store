@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Home,
   Inbox,
@@ -21,12 +21,17 @@ import {
   CornerDownRight,
   Layers,
   Sliders,
-  DownloadCloud
+  DownloadCloud,
+  ShoppingCart,
+  Mail,
+  ChevronDown,
+  Receipt
 } from 'lucide-react';
 
 export type ShopifyNavTab =
   | 'home'
   | 'orders'
+  | 'abandoned_checkouts'
   | 'products'
   | 'collections'
   | 'inventory'
@@ -42,6 +47,7 @@ export type ShopifyNavTab =
   | 'sales_online_store'
   | 'theme_customizer'
   | 'footer_settings'
+  | 'seo_generator'
   | 'sales_agentic'
   | 'sales_pos'
   | 'sales_facebook'
@@ -51,6 +57,7 @@ export type ShopifyNavTab =
   | 'sidekick_google'
   | 'vendor_payments'
   | 'dropship_import'
+  | 'billing'
   | 'settings';
 
 interface ShopifySidebarProps {
@@ -58,6 +65,7 @@ interface ShopifySidebarProps {
   onSelectTab: (tab: ShopifyNavTab) => void;
   ordersCount?: number;
   productsCount?: number;
+  abandonedCount?: number;
   isMobileOpen?: boolean;
   onCloseMobile?: () => void;
 }
@@ -67,9 +75,11 @@ export const ShopifySidebar: React.FC<ShopifySidebarProps> = ({
   onSelectTab,
   ordersCount = 0,
   productsCount = 0,
+  abandonedCount = 0,
   isMobileOpen = false,
   onCloseMobile
 }) => {
+  const [ordersGroupOpen, setOrdersGroupOpen] = useState(true);
   const handleNavClick = (tab: ShopifyNavTab) => {
     onSelectTab(tab);
     if (onCloseMobile) onCloseMobile();
@@ -114,19 +124,59 @@ export const ShopifySidebar: React.FC<ShopifySidebarProps> = ({
             <span className="truncate">Home</span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => handleNavClick('orders')}
-            className={navItemClass('orders')}
-          >
-            <Inbox className="w-4 h-4 text-[#5c5f62]" />
-            <span className="flex-1 truncate">Orders</span>
-            {ordersCount > 0 && (
-              <span className="text-[10px] font-mono font-bold bg-[#d4d6d8] px-1.5 py-0.2 rounded-full text-[#202223]">
-                {ordersCount}
-              </span>
+          {/* Orders Group with Sub-tabs (All Orders, Abandoned checkouts) */}
+          <div className="space-y-0.5">
+            <div className="flex items-center">
+              <button
+                type="button"
+                onClick={() => handleNavClick('orders')}
+                className={`flex-1 flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-xs transition-colors select-none text-left ${
+                  activeTab === 'orders'
+                    ? 'bg-white text-[#202223] font-semibold shadow-xs'
+                    : 'text-[#4a4a4a] hover:bg-[#e4e5e7] hover:text-[#202223] font-medium'
+                }`}
+              >
+                <Inbox className="w-4 h-4 text-[#5c5f62]" />
+                <span className="flex-1 truncate">Orders</span>
+                {ordersCount > 0 && (
+                  <span className="text-[10px] font-mono font-bold bg-[#d4d6d8] px-1.5 py-0.2 rounded-full text-[#202223]">
+                    {ordersCount}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setOrdersGroupOpen(!ordersGroupOpen)}
+                className="p-1 hover:bg-[#e4e5e7] rounded text-gray-500 transition-colors ml-0.5"
+                title="Toggle Orders submenu"
+              >
+                <ChevronDown
+                  className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                    ordersGroupOpen ? 'rotate-180' : ''
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* Orders Sub-navigation: Abandoned checkouts */}
+            {ordersGroupOpen && (
+              <div className="pl-2 space-y-0.5 border-l border-gray-300 ml-3.5 my-1">
+                <button
+                  type="button"
+                  onClick={() => handleNavClick('abandoned_checkouts')}
+                  className={subNavItemClass('abandoned_checkouts')}
+                >
+                  <ShoppingCart className="w-3.5 h-3.5 text-[#5c5f62]" />
+                  <span className="flex-1 truncate">Abandoned checkouts</span>
+                  {abandonedCount > 0 && (
+                    <span className="text-[10px] font-mono font-bold bg-amber-100 text-amber-800 px-1.5 py-0.2 rounded-full border border-amber-200">
+                      {abandonedCount}
+                    </span>
+                  )}
+                </button>
+              </div>
             )}
-          </button>
+          </div>
 
           {/* Products Group with Sub-tabs (Collections, Inventory, Purchase orders, Transfers, Gift cards) */}
           <div className="space-y-0.5">
@@ -203,6 +253,40 @@ export const ShopifySidebar: React.FC<ShopifySidebarProps> = ({
                 </span>
               </button>
             </div>
+          </div>
+
+          {/* DEDICATED DROPSHIPPING IMPORT TAB */}
+          <div className="pt-1 pb-1">
+            <button
+              type="button"
+              onClick={() => handleNavClick('dropship_import')}
+              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs transition-all select-none text-left cursor-pointer border ${
+                activeTab === 'dropship_import'
+                  ? 'bg-gradient-to-r from-blue-900 via-indigo-900 to-gray-900 text-white font-bold shadow-sm border-blue-700 ring-2 ring-blue-500/30'
+                  : 'bg-gradient-to-r from-blue-50/90 to-indigo-50/90 hover:from-blue-100 hover:to-indigo-100 text-blue-950 font-bold border-blue-200/80 shadow-2xs'
+              }`}
+            >
+              <div className={`w-6 h-6 rounded-lg flex items-center justify-center shrink-0 ${
+                activeTab === 'dropship_import'
+                  ? 'bg-blue-500/40 text-amber-300 shadow-inner'
+                  : 'bg-blue-600 text-white shadow-xs'
+              }`}>
+                <DownloadCloud className="w-3.5 h-3.5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <span className="truncate block font-bold text-xs">Dropshipping Import</span>
+                <span className={`text-[10px] block truncate font-medium ${
+                  activeTab === 'dropship_import' ? 'text-blue-200' : 'text-blue-600'
+                }`}>
+                  CJ, AliExpress & Multi-URL
+                </span>
+              </div>
+              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full shrink-0 ${
+                activeTab === 'dropship_import' ? 'bg-amber-400 text-gray-950' : 'bg-blue-600 text-white'
+              }`}>
+                ⚡ Bulk
+              </span>
+            </button>
           </div>
 
           <button
@@ -302,6 +386,23 @@ export const ShopifySidebar: React.FC<ShopifySidebarProps> = ({
           >
             <Layers className="w-3 h-3 text-blue-500" />
             <span className="truncate">Footer Editor (ফুটার এডিট)</span>
+          </button>
+
+          {/* Sub-item: Meta Tag & SEO Generator */}
+          <button
+            type="button"
+            onClick={() => handleNavClick('seo_generator')}
+            className={`w-full flex items-center gap-2 pl-7 pr-3 py-1 rounded-lg text-[11px] transition-colors select-none text-left ${
+              activeTab === 'seo_generator'
+                ? 'bg-white text-rose-700 font-bold shadow-xs'
+                : 'text-[#5c5f62] hover:bg-[#e4e5e7] hover:text-[#202223] font-medium'
+            }`}
+          >
+            <Globe className="w-3 h-3 text-rose-500" />
+            <span className="truncate">Meta Tag Generator (SEO)</span>
+            <span className="ml-auto text-[8.5px] bg-rose-100 text-rose-700 font-bold px-1 rounded">
+              OG
+            </span>
           </button>
 
           <button

@@ -3,6 +3,8 @@ import { VendorPaymentConfig, Product } from '../types';
 export const VENDOR_PAYMENT_RULES_STORAGE_KEY = 'banglaxpress_vendor_payment_rules';
 export const VENDOR_PAYMENT_RULES_EVENT = 'vendor_payment_rules_updated';
 
+export const DEFAULT_CHECKOUT_INSPECTION_NOTE = 'অরিজিনাল সকল প্রোডাক্ট ডেলিভারির সময় চেক করে দেখে মূল্য পরিশোধ করুন।';
+
 export const DEFAULT_VENDOR_PAYMENT_RULES: VendorPaymentConfig[] = [
   {
     vendor: 'Default',
@@ -10,7 +12,7 @@ export const DEFAULT_VENDOR_PAYMENT_RULES: VendorPaymentConfig[] = [
     defaultPaymentMethod: 'cod',
     requireAdvancePayment: false,
     advanceAmount: 0,
-    checkoutNote: 'স্ট্যান্ডার্ড স্টোর পেমেন্ট পলিসি। পণ্য ডেলিভারির সময় বা ডিজিটাল গেটওয়েতে পরিশোধ করুন।',
+    checkoutNote: DEFAULT_CHECKOUT_INSPECTION_NOTE,
     badgeText: 'Standard Store Policy',
     isActive: true
   },
@@ -20,7 +22,7 @@ export const DEFAULT_VENDOR_PAYMENT_RULES: VendorPaymentConfig[] = [
     defaultPaymentMethod: 'cod',
     requireAdvancePayment: false,
     advanceAmount: 0,
-    checkoutNote: 'অফিসিয়াল Merrono ব্র্যান্ড ওয়ারেন্টি সহ ক্যাশ অন ডেলিভারি প্রযোজ্য।',
+    checkoutNote: DEFAULT_CHECKOUT_INSPECTION_NOTE,
     badgeText: 'Merrono Certified',
     isActive: true
   },
@@ -31,7 +33,7 @@ export const DEFAULT_VENDOR_PAYMENT_RULES: VendorPaymentConfig[] = [
     requireAdvancePayment: false,
     advanceAmount: 0,
     customBkashNumber: '01700-123456 (Baseus Official)',
-    checkoutNote: 'Baseus অরিজিনাল গ্যাজেট। ডেলিভারির সময় চেক করে দেখে মূল্য পরিশোধ করুন।',
+    checkoutNote: DEFAULT_CHECKOUT_INSPECTION_NOTE,
     badgeText: 'Baseus Official',
     isActive: true
   },
@@ -41,7 +43,7 @@ export const DEFAULT_VENDOR_PAYMENT_RULES: VendorPaymentConfig[] = [
     defaultPaymentMethod: 'cod',
     requireAdvancePayment: false,
     advanceAmount: 0,
-    checkoutNote: 'স্মার্টওয়াচ ডেলিভারির সময় বক্স চেক করে মূল্য পরিশোধ করতে পারবেন।',
+    checkoutNote: DEFAULT_CHECKOUT_INSPECTION_NOTE,
     badgeText: 'Verified Watch Vendor',
     isActive: true
   },
@@ -51,7 +53,7 @@ export const DEFAULT_VENDOR_PAYMENT_RULES: VendorPaymentConfig[] = [
     defaultPaymentMethod: 'cod',
     requireAdvancePayment: false,
     advanceAmount: 0,
-    checkoutNote: 'অরিজিনাল রিম্যাক্স এক্সেসরিজ। ক্যাশ অন ডেলিভারি ও বিকাশ প্রযোজ্য।',
+    checkoutNote: DEFAULT_CHECKOUT_INSPECTION_NOTE,
     badgeText: 'Remax Official',
     isActive: true
   },
@@ -61,7 +63,7 @@ export const DEFAULT_VENDOR_PAYMENT_RULES: VendorPaymentConfig[] = [
     defaultPaymentMethod: 'cod',
     requireAdvancePayment: false,
     advanceAmount: 0,
-    checkoutNote: 'BanglaXpress ইন-হাউস সুপারফাস্ট ডেলিভারি ও ক্যাশ অন ডেলিভারি।',
+    checkoutNote: DEFAULT_CHECKOUT_INSPECTION_NOTE,
     badgeText: 'In-House Direct',
     isActive: true
   }
@@ -79,7 +81,12 @@ export function getVendorPaymentConfigs(): VendorPaymentConfig[] {
       localStorage.setItem(VENDOR_PAYMENT_RULES_STORAGE_KEY, JSON.stringify(DEFAULT_VENDOR_PAYMENT_RULES));
       return DEFAULT_VENDOR_PAYMENT_RULES;
     }
-    return parsed;
+    // Update any rules that still had old vendor-specific notes
+    const sanitized = parsed.map((item) => ({
+      ...item,
+      checkoutNote: DEFAULT_CHECKOUT_INSPECTION_NOTE
+    }));
+    return sanitized;
   } catch (err) {
     console.error('Error loading vendor payment configs:', err);
     return DEFAULT_VENDOR_PAYMENT_RULES;

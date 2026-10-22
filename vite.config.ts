@@ -11,19 +11,19 @@ export default defineConfig(() => {
         '@': path.resolve(__dirname, '.'),
       },
     },
-server: {
+    server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modify—file watching is disabled to prevent flickering during agent edits.
+      // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
-      // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
-      // Proxy dropship /api calls to the local Express proxy server (running on 5000).
       proxy: {
-        '/api': {
-          target: `http://localhost:${process.env.PROXY_PORT || 5000}`,
+        '/api/cj': {
+          target: 'https://developers.cjdropshipping.com/api2.0/v1',
           changeOrigin: true,
-        },
-      },
+          rewrite: (path) => path.replace(/^\/api\/cj/, ''),
+          secure: false
+        }
+      }
     },
   };
 });

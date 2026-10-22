@@ -12,6 +12,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { Category } from '../types';
+import { getCategoryDisplayName } from '../utils/translations';
 
 interface CategoryNavGridProps {
   categories: Category[];
@@ -19,6 +20,7 @@ interface CategoryNavGridProps {
   onSelectCategory: (cat: string) => void;
   title?: string;
   subtitle?: string;
+  lang?: 'en' | 'bn';
 }
 
 const ICON_MAP: Record<string, any> = {
@@ -39,9 +41,14 @@ export const CategoryNavGrid: React.FC<CategoryNavGridProps> = ({
   categories,
   selectedCategory,
   onSelectCategory,
-  title = 'পপুলার ক্যাটাগরি ব্রাউজ করুন',
-  subtitle = 'আপনার পছন্দের পণ্যটি খুব সহজেই খুঁজে নিন'
+  title,
+  subtitle,
+  lang = 'bn'
 }) => {
+  const defaultTitle = lang === 'en' ? 'Browse Popular Categories' : 'পপুলার ক্যাটাগরি ব্রাউজ করুন';
+  const defaultSubtitle = lang === 'en' ? 'Find your favorite gadgets with ease' : 'আপনার পছন্দের পণ্যটি খুব সহজেই খুঁজে নিন';
+  const displayTitle = title || defaultTitle;
+  const displaySubtitle = subtitle || defaultSubtitle;
   const handleCategoryClick = (cat: Category) => {
     if (cat.link) {
       if (cat.link.startsWith('http://') || cat.link.startsWith('https://')) {
@@ -64,10 +71,10 @@ export const CategoryNavGrid: React.FC<CategoryNavGridProps> = ({
       <div className="flex items-center justify-between mb-4">
         <div>
           <h2 className="text-lg sm:text-xl font-black text-gray-900 tracking-tight">
-            {title}
+            {displayTitle}
           </h2>
           <p className="text-xs text-gray-500">
-            {subtitle}
+            {displaySubtitle}
           </p>
         </div>
 
@@ -76,7 +83,7 @@ export const CategoryNavGrid: React.FC<CategoryNavGridProps> = ({
             onClick={() => onSelectCategory('all')}
             className="text-xs font-bold text-rose-600 hover:text-rose-700 flex items-center gap-1 cursor-pointer"
           >
-            <span>সব দেখুন (Show All)</span>
+            <span>{lang === 'en' ? 'Show All' : 'সব দেখুন (Show All)'}</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         )}
@@ -123,16 +130,16 @@ export const CategoryNavGrid: React.FC<CategoryNavGridProps> = ({
 
               <div className="w-full">
                 <h3 className="text-xs font-bold text-gray-900 line-clamp-1 group-hover:text-rose-600">
-                  {cat.name}
+                  {getCategoryDisplayName(cat, lang)}
                 </h3>
                 <p className="text-[10px] text-gray-400 mt-0.5 truncate">
-                  {cat.banglaName || cat.name}
+                  {lang === 'bn' ? cat.name : (cat.banglaName || '')}
                 </p>
               </div>
 
               <div className="mt-1 flex items-center gap-1">
                 <span className="text-[9.5px] font-mono font-semibold px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
-                  {cat.itemCount || 0}+ আইটেম
+                  {cat.itemCount || 0}+ {lang === 'en' ? 'items' : 'আইটেম'}
                 </span>
                 {cat.link && (
                   <ExternalLink className="w-2.5 h-2.5 text-rose-500 opacity-60 group-hover:opacity-100" />

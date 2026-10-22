@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { LayoutGrid, Flame, Sparkles, Tag, ChevronDown, Clock, ShieldCheck, CheckCircle2 } from 'lucide-react';
 import { Category } from '../../types';
+import { TRANSLATIONS, getCategoryDisplayName } from '../../utils/translations';
 
 interface CategoryBarProps {
   categories: Category[];
@@ -8,6 +9,7 @@ interface CategoryBarProps {
   onSelectCategory: (cat: string) => void;
   onScrollToFlashSale: () => void;
   onOpenTracking: () => void;
+  lang?: 'en' | 'bn';
 }
 
 export const CategoryBar: React.FC<CategoryBarProps> = ({
@@ -15,9 +17,11 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
   selectedCategory,
   onSelectCategory,
   onScrollToFlashSale,
-  onOpenTracking
+  onOpenTracking,
+  lang = 'bn'
 }) => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const t = TRANSLATIONS[lang];
 
   return (
     <nav className="bg-white border-b border-gray-100 hidden md:block relative z-30">
@@ -31,7 +35,7 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
             className="flex items-center gap-2.5 bg-rose-600 hover:bg-rose-700 text-white px-5 py-3 text-xs font-bold uppercase tracking-wider rounded-t-lg transition-colors cursor-pointer"
           >
             <LayoutGrid className="w-4 h-4" />
-            <span>সকল ক্যাটাগরি</span>
+            <span>{t.allCategories}</span>
             <ChevronDown className={`w-4 h-4 transition-transform ${dropdownOpen ? 'rotate-180' : ''}`} />
           </button>
 
@@ -50,7 +54,7 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
                   selectedCategory === 'all' ? 'bg-rose-50 text-rose-600' : 'text-gray-700'
                 }`}
               >
-                <span>সব প্রোডাক্ট (All Products)</span>
+                <span>{lang === 'en' ? 'All Products' : 'সব প্রোডাক্ট (All Products)'}</span>
                 <span className="text-[11px] text-gray-400">View all</span>
               </button>
 
@@ -66,8 +70,10 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
                   }`}
                 >
                   <div className="flex flex-col">
-                    <span>{cat.name}</span>
-                    <span className="text-[10px] text-gray-400">{cat.banglaName}</span>
+                    <span>{getCategoryDisplayName(cat, lang)}</span>
+                    <span className="text-[10px] text-gray-400">
+                      {lang === 'bn' ? cat.name : (cat.banglaName || '')}
+                    </span>
                   </div>
                   <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-mono">
                     {cat.itemCount}
@@ -86,7 +92,7 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
               selectedCategory === 'all' ? 'text-rose-600 font-bold border-b-2 border-rose-600' : ''
             }`}
           >
-            <span>হোম</span>
+            <span>{t.home}</span>
           </button>
 
           <button
@@ -94,7 +100,7 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
             className="py-3 text-rose-600 hover:text-rose-700 font-bold transition-colors flex items-center gap-1.5 animate-pulse"
           >
             <Flame className="w-4 h-4 fill-rose-600 text-rose-600" />
-            <span>ফ্ল্যাশ সেল (Flash Deals)</span>
+            <span>{t.flashDealsNav}</span>
           </button>
 
           <button
@@ -103,7 +109,7 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
               selectedCategory === 'Smart Watches' ? 'text-rose-600 font-bold border-b-2 border-rose-600' : ''
             }`}
           >
-            স্মার্টওয়াচ
+            {lang === 'en' ? 'Smart Watches' : 'স্মার্টওয়াচ'}
           </button>
 
           <button
@@ -112,7 +118,7 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
               selectedCategory === 'Earbuds & Audio' ? 'text-rose-600 font-bold border-b-2 border-rose-600' : ''
             }`}
           >
-            ইয়ারবাডস ও অডিও
+            {lang === 'en' ? 'Earbuds & Audio' : 'ইয়ারবাডস ও অডিও'}
           </button>
 
           <button
@@ -121,7 +127,7 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
               selectedCategory === "Men's Caps & Fashion" ? 'text-rose-600 font-bold border-b-2 border-rose-600' : ''
             }`}
           >
-            ক্যাপ কালেকশন
+            {lang === 'en' ? 'Caps Collection' : 'ক্যাপ কালেকশন'}
           </button>
 
           <button
@@ -130,7 +136,7 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
               selectedCategory === 'Home & Kitchen' ? 'text-rose-600 font-bold border-b-2 border-rose-600' : ''
             }`}
           >
-            হোম এপ্লায়েন্স
+            {lang === 'en' ? 'Home Appliances' : 'হোম এপ্লায়েন্স'}
           </button>
 
           <button
@@ -138,7 +144,7 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
             className="py-3 text-sky-600 hover:text-sky-700 font-medium transition-colors flex items-center gap-1"
           >
             <Clock className="w-3.5 h-3.5" />
-            <span>অর্ডার ট্র্যাকিং</span>
+            <span>{t.orderTrackingNav}</span>
           </button>
         </div>
 
@@ -146,7 +152,7 @@ export const CategoryBar: React.FC<CategoryBarProps> = ({
         <div className="flex items-center gap-3 text-xs text-gray-500 font-medium">
           <div className="flex items-center gap-1.5 text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-            <span className="text-[11px] font-semibold">১০০% ক্যাশ অন ডেলিভারি</span>
+            <span className="text-[11px] font-semibold">{t.codBadgeNav}</span>
           </div>
         </div>
 

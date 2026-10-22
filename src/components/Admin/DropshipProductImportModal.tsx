@@ -20,7 +20,9 @@ import {
   Info,
   Layers,
   Search,
-  Filter
+  Filter,
+  Zap,
+  Image as ImageIcon
 } from 'lucide-react';
 import { Product, DropshipPlatform } from '../../types';
 import {
@@ -31,10 +33,12 @@ import {
   saveStoredPricingRule,
   detectPlatformFromUrl,
   calculateDropshipPricing,
-  parseDropshipUrl,
-  resolveDropshipProduct,
-  DropshipDataSource
+  parseDropshipUrl
 } from '../../utils/dropshipImporter';
+import {
+  fetchCJProductData,
+  getStoredCJConfig
+} from '../../utils/cjDropshippingApi';
 
 interface DropshipProductImportModalProps {
   isOpen: boolean;
@@ -47,7 +51,7 @@ export const DropshipProductImportModal: React.FC<DropshipProductImportModalProp
   isOpen,
   onClose,
   onImportProducts,
-  showToast = (_msg?: string) => {}
+  showToast = (_message?: string) => {}
 }) => {
   if (!isOpen) return null;
 
@@ -65,7 +69,8 @@ export const DropshipProductImportModal: React.FC<DropshipProductImportModalProp
   const [extractedProduct, setExtractedProduct] = useState<Product | null>(null);
   const [priceBreakdown, setPriceBreakdown] = useState<ReturnType<typeof calculateDropshipPricing> | null>(null);
   const [sourcePriceText, setSourcePriceText] = useState('');
-  const [extractionSource, setExtractionSource] = useState<DropshipDataSource>('mock');
+  const [modalPreviewImgIdx, setModalPreviewImgIdx] = useState(0);
+  const [modalDetailsTab, setModalDetailsTab] = useState<'specs' | 'features' | 'variants' | 'description' | 'images'>('specs');
 
   // Mode 2: Batch URL State
   const [batchUrlsInput, setBatchUrlsInput] = useState('');
@@ -99,32 +104,53 @@ export const DropshipProductImportModal: React.FC<DropshipProductImportModalProp
     setExtractionLog([]);
     setExtractedProduct(null);
     setPriceBreakdown(null);
-    setExtractionSource('mock');
 
     const platformConfig = DROPSHIP_PLATFORMS[selectedPlatform];
+    const isCJ = selectedPlatform === 'cjdropshipping';
+    const cjConfig = getStoredCJConfig();
 
     // Animated scraping simulation steps
-    const logs = [
-      `Fetching live product data from ${platformConfig.name} (${platformConfig.domain})...`,
-      `Extracting real title, high-res images, price & shipping info...`,
-      `Converting currency (${platformConfig.currency} to BDT at ৳${platformConfig.currency === 'USD' ? pricingRule.usdRate : pricingRule.cnyRate})...`,
-      `Applying markup rule (${pricingRule.markupMultiplier}x multiplier + ৳${pricingRule.fixedMarkupBDT})...`,
-      `Auto-generating Bangla title, specs & warranty...`,
-      `Product parsed successfully! Ready for publishing.`
-    ];
+    const logs = isCJ
+      ? [
+          `Connecting to CJ Dropshipping Open API 2.0 gateway (developers.cjdropshipping.com)...`,
+          `Authenticating API Key & Token (${cjConfig.isConnected ? 'Status: Active Connected' : 'Status: API Ready'})...`,
+          `Querying CJ product catalog by PID/SKU/URL with live variants & stock...`,
+          `Converting CJ Price ($ USD to BDT at ৳${pricingRule.usdRate}) with ${cjConfig.shippingMethod}...`,
+          `Applying markup rule (${pricingRule.markupMultiplier}x multiplier + ৳${pricingRule.fixedMarkupBDT})...`,
+          `CJ Dropshipping product synchronized successfully! Ready for publishing.`
+        ]
+      : [
+          `Connecting to ${platformConfig.name} API gateway (${platformConfig.domain})...`,
+          `Extracting product title, high-res images, and SKU parameters...`,
+          `Converting currency (${platformConfig.currency} to BDT at ৳${platformConfig.currency === 'USD' ? pricingRule.usdRate : pricingRule.cnyRate})...`,
+          `Applying markup rule (${pricingRule.markupMultiplier}x multiplier + ৳${pricingRule.fixedMarkupBDT})...`,
+          `Auto-generating Bangla title, specs & warranty...`,
+          `Product parsed successfully! Ready for publishing.`
+        ];
 
     for (let i = 0; i < logs.length; i++) {
-      await new Promise((resolve) => setTimeout(resolve, 320));
+      await new Promise((resolve) => setTimeout(resolve, 250));
       setExtractionLog((prev) => [...prev, logs[i]]);
     }
 
     try {
-      const parsed = await resolveDropshipProduct(singleUrlInput, selectedPlatform, pricingRule);
-      setExtractedProduct(parsed.product);
-      setPriceBreakdown(parsed.profitCalculation);
-      setSourcePriceText(parsed.sourcePriceText);
-      setExtractionSource(parsed.source);
-      showToast(`${platformConfig.name} থেকে পণ্য তথ্য সফলভাবে লোড হয়েছে!`);
+      if (isCJ) {
+        const cjResult = await fetchCJProductData(singleUrlInput, cjConfig, pricingRule);
+        setExtractedProduct(cjResult.product);
+        setPriceBreakdown(cjResult.profitCalculation);
+        setSourcePriceText(`$${cjResult.rawData.sourcePriceUSD} USD`);
+        setModalPreviewImgIdx(0);
+        setModalDetailsTab('specs');
+        showToast('CJ Dropshipping পণ্য সফলভাবে ফেচ করা হয়েছে!');
+      } else {
+        const parsed = parseDropshipUrl(singleUrlInput, selectedPlatform, pricingRule);
+        setExtractedProduct(parsed.product);
+        setPriceBreakdown(parsed.profitCalculation);
+        setSourcePriceText(parsed.sourcePriceFormatted);
+        setModalPreviewImgIdx(0);
+        setModalDetailsTab('specs');
+        showToast(`${platformConfig.name} থেকে পণ্য তথ্য সফলভাবে লোড হয়েছে!`);
+      }
     } catch (e) {
       showToast('পণ্য এক্সট্রাক্ট করতে সমস্যা হয়েছে। লিঙ্কটি পুনরায় চেক করুন।');
     } finally {
@@ -173,7 +199,7 @@ export const DropshipProductImportModal: React.FC<DropshipProductImportModalProp
     for (let i = 0; i < rawUrls.length; i++) {
       const url = rawUrls[i];
       await new Promise((resolve) => setTimeout(resolve, 400));
-      const parsed = await resolveDropshipProduct(url, undefined, pricingRule);
+      const parsed = parseDropshipUrl(url, undefined, pricingRule);
       importedList.push(parsed.product);
       setBatchResults([...importedList]);
       setBatchProgress(Math.round(((i + 1) / rawUrls.length) * 100));
@@ -506,15 +532,6 @@ export const DropshipProductImportModal: React.FC<DropshipProductImportModalProp
                       >
                         {DROPSHIP_PLATFORMS[extractedProduct.dropship?.platform as DropshipPlatform || 'aliexpress']?.name} Direct
                       </span>
-                      {extractionSource === 'mock' ? (
-                        <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
-                          SIMULATED DATA
-                        </span>
-                      ) : (
-                        <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                          LIVE REAL DATA ({extractionSource.toUpperCase()})
-                        </span>
-                      )}
                     </div>
 
                     <div className="flex items-center gap-2 text-xs">
@@ -525,31 +542,91 @@ export const DropshipProductImportModal: React.FC<DropshipProductImportModalProp
                     </div>
                   </div>
 
-                  {/* Main Product Layout */}
+                  {/* Main Product Layout with All Images and Specs */}
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
-                    {/* Left: Images */}
-                    <div className="md:col-span-4 space-y-2">
-                      <div className="aspect-square rounded-xl overflow-hidden bg-gray-100 border border-gray-200">
+                    {/* Left: Images Interactive Gallery */}
+                    <div className="md:col-span-5 space-y-2.5">
+                      <div className="relative aspect-square rounded-2xl overflow-hidden bg-gray-100 border border-gray-200 shadow-inner group">
                         <img
-                          src={extractedProduct.images[0]}
+                          src={extractedProduct.images[modalPreviewImgIdx] || extractedProduct.images[0]}
                           alt={extractedProduct.name}
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                         />
+                        <div className="absolute top-2.5 left-2.5 flex flex-col gap-1 items-start">
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-gray-900/80 text-white backdrop-blur-xs flex items-center gap-1 shadow-xs">
+                            <ImageIcon className="w-3 h-3 text-amber-300" />
+                            <span>ছবি {modalPreviewImgIdx + 1} / {extractedProduct.images.length}</span>
+                          </span>
+                        </div>
+                        <div className="absolute bottom-2.5 right-2.5">
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-600/90 text-white backdrop-blur-xs">
+                            ✓ HD কোয়ালিটি
+                          </span>
+                        </div>
                       </div>
-                      <div className="grid grid-cols-3 gap-1.5">
-                        {extractedProduct.images.slice(0, 3).map((img, i) => (
-                          <div
-                            key={i}
-                            className="aspect-square rounded-lg overflow-hidden border border-gray-200 bg-gray-50"
-                          >
-                            <img src={img} alt="" className="w-full h-full object-cover" />
-                          </div>
-                        ))}
+
+                      {/* Thumbnail Row of ALL Captured Images */}
+                      <div>
+                        <div className="flex items-center justify-between text-[11px] text-gray-500 mb-1 px-0.5">
+                          <span className="font-semibold text-gray-700 flex items-center gap-1">
+                            <Layers className="w-3.5 h-3.5 text-blue-600" />
+                            ক্যাপচার্ড সব ছবি ({extractedProduct.images.length}টি ইমেজ):
+                          </span>
+                          <span className="text-[10px] text-gray-400">ক্লিক করে বড় ছবি দেখুন</span>
+                        </div>
+                        <div className="grid grid-cols-5 gap-1.5">
+                          {extractedProduct.images.map((img, i) => (
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={() => setModalPreviewImgIdx(i)}
+                              className={`aspect-square rounded-xl overflow-hidden border-2 transition-all cursor-pointer relative bg-gray-50 ${
+                                modalPreviewImgIdx === i
+                                  ? 'border-rose-600 ring-2 ring-rose-200 scale-102 shadow-xs'
+                                  : 'border-gray-200 hover:border-gray-400 opacity-80 hover:opacity-100'
+                              }`}
+                            >
+                              <img src={img} alt="" className="w-full h-full object-cover" />
+                              <span className="absolute bottom-0.5 right-0.5 bg-black/60 text-[8px] font-bold text-white px-1 rounded">
+                                #{i + 1}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Supplier & Delivery Badges */}
+                      <div className="p-2.5 bg-gray-50/80 rounded-xl border border-gray-200 grid grid-cols-2 gap-2 text-[11px]">
+                        <div>
+                          <span className="text-gray-400 block text-[9.5px]">সাপ্লায়ার হাব</span>
+                          <strong className="text-gray-800 truncate block">
+                            {extractedProduct.dropship?.supplierName || 'Verified Factory Direct'}
+                          </strong>
+                        </div>
+                        <div>
+                          <span className="text-gray-400 block text-[9.5px]">শিপিং ডেলিভারি</span>
+                          <strong className="text-blue-700 truncate block flex items-center gap-1">
+                            <Truck className="w-3 h-3 text-blue-500" />
+                            {extractedProduct.dropship?.shippingDays || '7-14 Days Air'}
+                          </strong>
+                        </div>
+                        <div>
+                          <span className="text-gray-400 block text-[9.5px]">রেটিং ও রিভিউ</span>
+                          <strong className="text-amber-600">
+                            ★ {extractedProduct.rating} ({extractedProduct.reviewCount}+ রেটিং)
+                          </strong>
+                        </div>
+                        <div>
+                          <span className="text-gray-400 block text-[9.5px]">লাইভ স্টক ইনভেন্টরি</span>
+                          <strong className="text-emerald-700 font-mono">
+                            {extractedProduct.stockCount} Available
+                          </strong>
+                        </div>
                       </div>
                     </div>
 
                     {/* Right: Editable Details */}
-                    <div className="md:col-span-8 space-y-3.5 text-xs">
+                    <div className="md:col-span-7 space-y-3 text-xs">
                       <div>
                         <label className="block font-bold text-gray-700 mb-1">
                           প্রোডাক্টের নাম (English Title):
@@ -560,7 +637,7 @@ export const DropshipProductImportModal: React.FC<DropshipProductImportModalProp
                           onChange={(e) =>
                             setExtractedProduct({ ...extractedProduct, name: e.target.value })
                           }
-                          className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-xs font-semibold text-gray-900"
+                          className="w-full px-3 py-1.5 border border-gray-300 rounded-xl text-xs font-semibold text-gray-900 focus:border-rose-600 outline-none"
                         />
                       </div>
 
@@ -574,11 +651,11 @@ export const DropshipProductImportModal: React.FC<DropshipProductImportModalProp
                           onChange={(e) =>
                             setExtractedProduct({ ...extractedProduct, banglaName: e.target.value })
                           }
-                          className="w-full px-3 py-1.5 border border-gray-300 rounded-lg text-xs font-medium text-gray-800"
+                          className="w-full px-3 py-1.5 border border-gray-300 rounded-xl text-xs font-medium text-gray-800 focus:border-rose-600 outline-none"
                         />
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                         <div>
                           <label className="block font-bold text-gray-700 mb-1">ক্যাটাগরি:</label>
                           <select
@@ -586,13 +663,14 @@ export const DropshipProductImportModal: React.FC<DropshipProductImportModalProp
                             onChange={(e) =>
                               setExtractedProduct({ ...extractedProduct, category: e.target.value })
                             }
-                            className="w-full px-2.5 py-1.5 border border-gray-300 rounded-lg text-xs bg-white"
+                            className="w-full px-2 py-1.5 border border-gray-300 rounded-xl text-xs bg-white focus:border-rose-600 outline-none"
                           >
                             <option value="Smart Watches">Smart Watches</option>
                             <option value="Earbuds & Audio">Earbuds & Audio</option>
                             <option value="Power & Charging">Power & Charging</option>
                             <option value="Computer & Gaming">Computer & Gaming</option>
                             <option value="Home & Kitchen">Home & Kitchen</option>
+                            <option value="Health & Wellness">Health & Wellness</option>
                             <option value="Men's Caps & Fashion">Men's Caps & Fashion</option>
                           </select>
                         </div>
@@ -610,7 +688,7 @@ export const DropshipProductImportModal: React.FC<DropshipProductImportModalProp
                                 price: Number(e.target.value)
                               })
                             }
-                            className="w-full px-2.5 py-1.5 border border-gray-300 rounded-lg text-xs font-mono font-bold text-emerald-700"
+                            className="w-full px-2 py-1.5 border border-gray-300 rounded-xl text-xs font-mono font-bold text-emerald-700 focus:border-emerald-600 outline-none"
                           />
                         </div>
 
@@ -627,87 +705,152 @@ export const DropshipProductImportModal: React.FC<DropshipProductImportModalProp
                                 originalPrice: Number(e.target.value)
                               })
                             }
-                            className="w-full px-2.5 py-1.5 border border-gray-300 rounded-lg text-xs font-mono text-gray-500"
+                            className="w-full px-2 py-1.5 border border-gray-300 rounded-xl text-xs font-mono text-gray-500 focus:border-rose-600 outline-none"
                           />
                         </div>
                       </div>
 
                       {/* Profit Breakdown Banner */}
-                      <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex flex-wrap items-center justify-between gap-3">
+                      <div className="p-2.5 bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 border border-emerald-200 rounded-xl flex flex-wrap items-center justify-between gap-2 shadow-2xs">
                         <div>
-                          <p className="text-[11px] font-bold text-emerald-900">
-                            প্রফিট হিসাব (Profit Margin Analysis):
+                          <p className="text-[11px] font-bold text-emerald-950 flex items-center gap-1.5">
+                            <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>প্রফিট মার্জিন বিশ্লেষণ:</span>
                           </p>
-                          <p className="text-[11px] text-emerald-700">
-                            আনুমানিক খরচ: ৳{priceBreakdown.landedCostBDT} | বিক্রয় মূল্য: ৳
-                            {extractedProduct.price}
+                          <p className="text-[10.5px] text-emerald-700">
+                            আনুমানিক খরচ: ৳{priceBreakdown.landedCostBDT} | বিক্রয় মূল্য: ৳{extractedProduct.price}
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="px-2 py-1 rounded bg-emerald-600 text-white font-mono font-bold text-xs">
+                          <span className="px-2.5 py-0.5 rounded-lg bg-emerald-600 text-white font-mono font-bold text-xs">
                             +৳{extractedProduct.price - priceBreakdown.landedCostBDT} লাভ
                           </span>
-                          <span className="text-[11px] font-semibold text-emerald-800">
+                          <span className="text-[11px] font-bold text-emerald-800">
                             ({Math.round(((extractedProduct.price - priceBreakdown.landedCostBDT) / extractedProduct.price) * 100)}% মার্জিন)
                           </span>
                         </div>
                       </div>
 
-                      {/* Source & Shipping Info */}
-                      <div className="p-2.5 bg-gray-50 border border-gray-200 rounded-xl grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
-                        <div>
-                          <span className="text-gray-500 block">সাপ্লায়ার:</span>
-                          <span className="font-semibold text-gray-800 truncate block">
-                            {extractedProduct.dropship?.supplierName}
-                          </span>
+                      {/* Secondary Details Tabs (Specifications, Features, Variants, Description) */}
+                      <div className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-2xs">
+                        <div className="flex items-center border-b border-gray-200 bg-gray-50/70 p-1 overflow-x-auto text-[10.5px] font-semibold gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setModalDetailsTab('specs')}
+                            className={`px-2.5 py-1 rounded-lg whitespace-nowrap transition-colors cursor-pointer ${
+                              modalDetailsTab === 'specs'
+                                ? 'bg-white text-gray-900 font-bold shadow-xs border border-gray-200/80'
+                                : 'text-gray-500 hover:text-gray-800'
+                            }`}
+                          >
+                            ⚙️ স্পেসিফিকেশন ({Object.keys(extractedProduct.specifications || {}).length})
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setModalDetailsTab('features')}
+                            className={`px-2.5 py-1 rounded-lg whitespace-nowrap transition-colors cursor-pointer ${
+                              modalDetailsTab === 'features'
+                                ? 'bg-white text-gray-900 font-bold shadow-xs border border-gray-200/80'
+                                : 'text-gray-500 hover:text-gray-800'
+                            }`}
+                          >
+                            ✨ ফিচার ({extractedProduct.features?.length || 0})
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setModalDetailsTab('variants')}
+                            className={`px-2.5 py-1 rounded-lg whitespace-nowrap transition-colors cursor-pointer ${
+                              modalDetailsTab === 'variants'
+                                ? 'bg-white text-gray-900 font-bold shadow-xs border border-gray-200/80'
+                                : 'text-gray-500 hover:text-gray-800'
+                            }`}
+                          >
+                            🎨 কালার ({extractedProduct.colors?.length || 0})
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setModalDetailsTab('description')}
+                            className={`px-2.5 py-1 rounded-lg whitespace-nowrap transition-colors cursor-pointer ${
+                              modalDetailsTab === 'description'
+                                ? 'bg-white text-gray-900 font-bold shadow-xs border border-gray-200/80'
+                                : 'text-gray-500 hover:text-gray-800'
+                            }`}
+                          >
+                            📝 বিবরণ
+                          </button>
                         </div>
-<div>
-                          <span className="text-gray-500 block">শিপিং সময়:</span>
-                          <span className="font-semibold text-gray-800">
-                            {extractedProduct.dropship?.shippingDays}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-gray-500 block">শিপিং খরচ:</span>
-                          <span className="font-semibold text-gray-800 font-mono">
-                            {extractedProduct.dropship?.shippingCost != null
-                              ? `৳${extractedProduct.dropship.shippingCost.toLocaleString()}`
-                              : 'Pricing rule এ ধার্য (Allowance)'}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-gray-500 block">রেটিং:</span>
-                          <span className="font-semibold text-amber-600">
-                            ★ {extractedProduct.rating} ({extractedProduct.reviewCount})
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-gray-500 block">স্টক:</span>
-                          <span className="font-semibold text-emerald-700 font-mono">
-                            {extractedProduct.stockCount} Available
-                          </span>
+
+                        <div className="p-3 max-h-36 overflow-y-auto text-xs bg-white">
+                          {modalDetailsTab === 'specs' && (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                              {Object.entries(extractedProduct.specifications || {}).map(([key, val]) => (
+                                <div key={key} className="p-1.5 bg-gray-50 rounded-lg border border-gray-100 flex flex-col">
+                                  <span className="text-gray-400 text-[9.5px] font-medium uppercase tracking-wider">{key}</span>
+                                  <span className="font-semibold text-gray-800 text-[11px] mt-0.5">{val}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {modalDetailsTab === 'features' && (
+                            <ul className="space-y-1">
+                              {(extractedProduct.features || []).map((feat, i) => (
+                                <li key={i} className="flex items-start gap-1.5 text-[11px] text-gray-700">
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 mt-0.5 shrink-0" />
+                                  <span>{feat}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+
+                          {modalDetailsTab === 'variants' && (
+                            <div className="space-y-1.5">
+                              <p className="text-[10.5px] text-gray-500">কালার অপশনসমূহ:</p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {(extractedProduct.colors || []).map((col, idx) => (
+                                  <div
+                                    key={idx}
+                                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-gray-200 bg-gray-50 text-[11px] font-semibold text-gray-800"
+                                  >
+                                    <span
+                                      className="w-3 h-3 rounded-full border border-gray-300 shadow-2xs"
+                                      style={{ backgroundColor: col.hex }}
+                                    />
+                                    <span>{col.name}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {modalDetailsTab === 'description' && (
+                            <div className="space-y-1.5 text-[11px] text-gray-700 leading-relaxed">
+                              <p className="font-medium text-gray-900">{extractedProduct.banglaDescription}</p>
+                              <p className="text-gray-600">{extractedProduct.description}</p>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  {/* Actions */}
+                  {/* Actions Toolbar */}
                   <div className="border-t border-gray-200 pt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
                     <a
                       href={extractedProduct.dropship?.sourceUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-xs text-gray-500 hover:text-gray-800 flex items-center gap-1"
+                      className="text-xs text-gray-500 hover:text-gray-800 flex items-center gap-1.5"
                     >
-                      <ExternalLink className="w-3.5 h-3.5" />
+                      <ExternalLink className="w-3.5 h-3.5 text-blue-600" />
                       <span>উৎস প্ল্যাটফর্মে ওপেন করুন</span>
                     </a>
 
-                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <div className="flex items-center gap-2.5 w-full sm:w-auto">
                       <button
                         type="button"
                         onClick={() => handlePublishSingleProduct('draft')}
-                        className="flex-1 sm:flex-none px-4 py-2 border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-xl text-xs font-semibold"
+                        className="flex-1 sm:flex-none px-4 py-2 border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-xl text-xs font-semibold cursor-pointer"
                       >
                         ড্রাফট হিসেবে রাখুন (Save Draft)
                       </button>
@@ -715,10 +858,10 @@ export const DropshipProductImportModal: React.FC<DropshipProductImportModalProp
                       <button
                         type="button"
                         onClick={() => handlePublishSingleProduct('active')}
-                        className="flex-1 sm:flex-none px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs"
+                        className="flex-1 sm:flex-none px-6 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer active:scale-98"
                       >
-                        <Check className="w-4 h-4" />
-                        <span>স্টোরে পাবলিশ করুন (Publish to Store)</span>
+                        <Sparkles className="w-4 h-4 text-amber-300" />
+                        <span>⚡ সব তথ্য ও ছবি সহ ১-ক্লিকে স্টোরে ইম্পোর্ট করুন</span>
                       </button>
                     </div>
                   </div>

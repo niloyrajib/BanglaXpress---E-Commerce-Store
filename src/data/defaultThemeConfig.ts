@@ -155,6 +155,9 @@ export const DEFAULT_THEME_CONFIG: ThemeConfig = {
     copyrightText: '© 2026 BanglaXpress Inc. All Rights Reserved. Powered by Aurora Modern v2.4',
     brandName: 'BanglaXpress',
     brandSuffix: '.store',
+    logoUrl: '',
+    logoStyle: 'badge',
+    showLogo: true,
     categoriesTitle: 'জনপ্রিয় ক্যাটাগরি',
     categoriesList: [
       { label: 'স্মার্টওয়াচ ও কলিং ওয়াচ (Smart Watches)', categoryName: 'Smart Watches' },
@@ -195,5 +198,22 @@ export const DEFAULT_THEME_CONFIG: ThemeConfig = {
     borderRadius: 'rounded-xl'
   },
 
-  sectionsOrder: DEFAULT_DYNAMIC_SECTIONS
+  sectionsOrder: DEFAULT_DYNAMIC_SECTIONS,
+
+  seo: {
+    metaTitle: 'BanglaXpress - E-Commerce Store & Gadget Hub Bangladesh',
+    metaDescription: 'A modern Bangladeshi e-commerce platform with Shopify-style admin dashboard, direct dropshipping import from AliExpress, 1688, Alibaba, CJ Dropshipping, and Taobao, vendor-wise payment methods, 1-click fast express checkout, no-code visual homepage theme customizer, bKash & Nagad payments, and inventory management.',
+    metaKeywords: 'e-commerce bangladesh, smart watches bd, tws earbuds dhaka, online shopping bangladesh, cod dhaka, bkash payment ecommerce, dropshipping bd',
+    author: 'BanglaXpress Inc.',
+    canonicalUrl: 'https://banglaxpress.store',
+    ogTitle: 'BanglaXpress - Premium Smart Gadgets & Lifestyle in Bangladesh',
+    ogDescription: 'Shop verified gadgets with nationwide Cash on Delivery, official warranty, bKash/Nagad instant payment, and 24-48h express delivery across Bangladesh.',
+    ogImage: 'https://images.unsplash.com/photo-1546868871-7041f2a55e12?w=1200&auto=format&fit=crop&q=80',
+    ogType: 'website',
+    twitterCard: 'summary_large_image',
+    twitterCreator: '@banglaxpress',
+    enableStructuredData: true,
+    structuredDataType: 'OnlineStore',
+    lastUpdated: '2026-03-30'
+  }
 };

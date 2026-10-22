@@ -30,11 +30,29 @@ import {
   FolderPlus,
   Folder,
   X,
-  Upload
+  Upload,
+  Award,
+  Zap,
+  RefreshCw,
+  Info,
+  GripVertical,
+  Database,
+  Palette
 } from 'lucide-react';
-import { Product, Category, ThemeConfig } from '../../types';
+import { Product, Category, ThemeConfig, DropshipPlatform, ProductOption, ProductVariant } from '../../types';
 import { CATEGORIES } from '../../data/mockData';
 import { DEFAULT_THEME_CONFIG } from '../../data/defaultThemeConfig';
+import {
+  fetchCJProductData,
+  CJ_WINNING_CATALOG_DATABASE,
+  getStoredCJConfig
+} from '../../utils/cjDropshippingApi';
+import {
+  parseDropshipUrl,
+  DROPSHIP_PLATFORMS,
+  getStoredPricingRule
+} from '../../utils/dropshipImporter';
+import { getColorHex, detectColorName, getDisplayNameForColor, getColorSummaryStatement } from '../../utils/colorUtils';
 
 interface ShopifyProductEditorProps {
   initialProduct?: Product | null;
@@ -154,7 +172,24 @@ Easy to fold, store, and carry — ideal for office, home, classroom, and travel
   const [productType, setProductType] = useState(
     initialProduct?.productType || 'Laptop & Tablet Stand'
   );
+  const [brand, setBrand] = useState(
+    initialProduct?.brand || initialProduct?.vendor || 'Merrono'
+  );
   const [vendor, setVendor] = useState(initialProduct?.vendor || 'Merrono');
+
+  // Custom Brands & Dropdown State
+  const [customBrands, setCustomBrands] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('banglaxpress_custom_brands');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [isNewBrandModalOpen, setIsNewBrandModalOpen] = useState(false);
+  const [newBrandName, setNewBrandName] = useState('');
+  const [isBrandDropdownOpen, setIsBrandDropdownOpen] = useState(false);
+  const [brandSearchQuery, setBrandSearchQuery] = useState('');
 
   // Custom Types & Dropdown State
   const [customTypes, setCustomTypes] = useState<string[]>(() => {
@@ -213,6 +248,41 @@ Easy to fold, store, and carry — ideal for office, home, classroom, and travel
     });
     return Array.from(set);
   }, [customTypes, allProducts]);
+
+  // Available Brands List (Aggregated from mock, all products & custom brands)
+  const availableBrandsList = useMemo(() => {
+    const set = new Set<string>();
+    const standards = [
+      'Merrono',
+      'Apple',
+      'Samsung',
+      'Xiaomi',
+      'Anker',
+      'Baseus',
+      'Remax',
+      'Hoco',
+      'Lenovo',
+      'OnePlus',
+      'Sony',
+      'Ugreen',
+      'Realme',
+      'Joyroom',
+      'Boat',
+      'A4Tech',
+      'Logitech',
+      'Haylou',
+      'QCY',
+      'Oraimo',
+      'No Brand / Non-Brand'
+    ];
+    standards.forEach((s) => set.add(s));
+    customBrands.forEach((c) => set.add(c));
+    allProducts.forEach((p) => {
+      if (p.brand?.trim()) set.add(p.brand.trim());
+      if (p.vendor?.trim()) set.add(p.vendor.trim());
+    });
+    return Array.from(set);
+  }, [customBrands, allProducts]);
 
   // Available Vendors List (Aggregated from mock, all products & custom)
   const availableVendorsList = useMemo(() => {
@@ -420,14 +490,323 @@ Easy to fold, store, and carry — ideal for office, home, classroom, and travel
   );
   const [hsCode, setHsCode] = useState(initialProduct?.hsCode || '8473.30.00');
 
-  // 9. VARIANTS
-  const [hasVariants, setHasVariants] = useState<boolean>(
-    Boolean(initialProduct?.colors?.length) || true
-  );
+  // 9. VARIANTS & OPTIONS (SHOPIFY POLARIS 1:1 REPLICA)
+  const initialOptions: (ProductOption & { isEditing?: boolean })[] = useMemo(() => {
+    if (initialProduct?.options && initialProduct.options.length > 0) {
+      return initialProduct.options.map((opt) => ({
+        ...opt,
+        isEditing: false
+      }));
+    }
+    const derived: (ProductOption & { isEditing?: boolean })[] = [];
+    if (initialProduct?.sizes && initialProduct.sizes.length > 0) {
+      derived.push({
+        id: 'opt-size',
+        name: 'Size',
+        values: [...initialProduct.sizes],
+        isEditing: false
+      });
+    }
+    if (initialProduct?.colors && initialProduct.colors.length > 0) {
+      derived.push({
+        id: 'opt-color',
+        name: 'Color',
+        values: initialProduct.colors.map((c) => c.name),
+        isEditing: false
+      });
+    }
+    if (derived.length === 0) {
+      derived.push({
+        id: 'opt-size',
+        name: 'Size',
+        values: ['S', 'M', 'L', 'XL'],
+        isEditing: false
+      });
+      derived.push({
+        id: 'opt-color',
+        name: 'Color',
+        values: ['Black', 'Silver', 'Navy Blue'],
+        isEditing: false
+      });
+    }
+    return derived;
+  }, [initialProduct]);
+
+  const [options, setOptions] = useState<(ProductOption & { isEditing?: boolean })[]>(initialOptions);
+  const [hasVariants, setHasVariants] = useState<boolean>(initialOptions.length > 0);
+  const [showOptionPicker, setShowOptionPicker] = useState(false);
+  const [optionSearchQuery, setOptionSearchQuery] = useState('');
+  const [editingOptionValues, setEditingOptionValues] = useState<Record<string, string>>({});
+  const [customOptionName, setCustomOptionName] = useState('');
+
   const [variantColors, setVariantColors] = useState<string[]>(
     initialProduct?.categoryMetafields?.color || ['Orange', 'Silver', 'Black']
   );
   const [newColorInput, setNewColorInput] = useState('');
+
+  // Variants list for customized pricing/inventory/sku per variant
+  const [variantsList, setVariantsList] = useState<ProductVariant[]>(() => {
+    if (initialProduct?.variants && initialProduct.variants.length > 0) {
+      return initialProduct.variants;
+    }
+    return [];
+  });
+
+  // Recommended options list (matching Shopify Polaris exactly from screenshot)
+  const RECOMMENDED_OPTIONS = [
+    'Color',
+    'Size',
+    'Fabric',
+    'Features',
+    'Clothing features',
+    'Material',
+    'Style',
+    'Neckline',
+    'Sleeve length type',
+    'Sleeve style',
+    'Top length type',
+    'Age group',
+    'Care instructions',
+    'Decoration technique',
+    'Size type',
+    'Storage capacity'
+  ];
+
+  // Quick category recommendation chips (from top right in screenshot)
+  const CATEGORY_SUGGESTIONS = [
+    'Neckline',
+    'Top length type',
+    'Decoration technique',
+    'Sleeve style',
+    'Fabric'
+  ];
+
+  // Helper to add an option from picker or chips
+  const handleAddOptionByName = (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const exists = options.find((o) => o.name.toLowerCase() === trimmed.toLowerCase());
+    if (exists) {
+      setOptions(options.map((o) => (o.id === exists.id ? { ...o, isEditing: true } : o)));
+      setShowOptionPicker(false);
+      return;
+    }
+
+    const defaultVals =
+      trimmed.toLowerCase() === 'size'
+        ? ['S', 'M', 'L', 'XL']
+        : trimmed.toLowerCase() === 'color'
+        ? ['Black', 'White', 'Blue']
+        : trimmed.toLowerCase() === 'fabric'
+        ? ['Cotton', 'Polyester']
+        : trimmed.toLowerCase() === 'neckline'
+        ? ['Crewneck', 'V-Neck', 'Collared']
+        : trimmed.toLowerCase().includes('feature')
+        ? ['Foldable', 'Lightweight', 'Portable', 'Waterproof']
+        : trimmed.toLowerCase() === 'material'
+        ? ['Aluminum Alloy', 'Silicone', 'Plastic']
+        : [];
+
+    const newOpt: ProductOption & { isEditing?: boolean } = {
+      id: `opt-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      name: trimmed,
+      values: defaultVals,
+      isEditing: true
+    };
+
+    setOptions([...options, newOpt]);
+    setHasVariants(true);
+    setShowOptionPicker(false);
+    setOptionSearchQuery('');
+    setCustomOptionName('');
+    notifyChange();
+  };
+
+  const handleUpdateOptionName = (optId: string, newName: string) => {
+    setOptions(options.map((o) => (o.id === optId ? { ...o, name: newName } : o)));
+    notifyChange();
+  };
+
+  const handleAddOptionValue = (optId: string) => {
+    const rawVal = editingOptionValues[optId]?.trim();
+    if (!rawVal) return;
+
+    const targetOpt = options.find((o) => o.id === optId);
+    const isColor = targetOpt && targetOpt.name.toLowerCase() === 'color';
+
+    // Support comma separated values e.g. "S, M, L, XL"
+    const splitVals = rawVal.split(',').map((v) => v.trim()).filter((v) => v.length > 0);
+
+    setOptions(
+      options.map((o) => {
+        if (o.id !== optId) return o;
+        const newVals = [...o.values];
+        splitVals.forEach((val) => {
+          let finalVal = val;
+          // If option is Color and user typed a raw hex code, auto-detect name with hex
+          if (isColor && (/^#([A-Fa-f0-9]{3}){1,2}$/.test(val) || /^([A-Fa-f0-9]{6})$/.test(val))) {
+            const detected = detectColorName(val);
+            finalVal = `${detected.name} (${detected.hex})`;
+          }
+          if (!newVals.includes(finalVal)) {
+            newVals.push(finalVal);
+          }
+        });
+        return { ...o, values: newVals };
+      })
+    );
+
+    setEditingOptionValues({ ...editingOptionValues, [optId]: '' });
+    notifyChange();
+  };
+
+  const handleAddSpecificValue = (optId: string, val: string) => {
+    const clean = val.trim();
+    if (!clean) return;
+    setOptions(
+      options.map((o) => {
+        if (o.id !== optId) return o;
+        if (o.values.includes(clean)) return o;
+        return { ...o, values: [...o.values, clean] };
+      })
+    );
+    setEditingOptionValues({ ...editingOptionValues, [optId]: '' });
+    notifyChange();
+  };
+
+  const handleRemoveOptionValue = (optId: string, valToRemove: string) => {
+    setOptions(
+      options.map((o) => (o.id === optId ? { ...o, values: o.values.filter((v) => v !== valToRemove) } : o))
+    );
+    notifyChange();
+  };
+
+  const handleDeleteOption = (optId: string) => {
+    const updated = options.filter((o) => o.id !== optId);
+    setOptions(updated);
+    if (updated.length === 0) {
+      setHasVariants(false);
+    }
+    notifyChange();
+  };
+
+  const handleDoneOption = (optId: string) => {
+    if (editingOptionValues[optId]?.trim()) {
+      handleAddOptionValue(optId);
+    }
+    setOptions(options.map((o) => (o.id === optId ? { ...o, isEditing: false } : o)));
+    notifyChange();
+  };
+
+  const handleEditOption = (optId: string) => {
+    setOptions(options.map((o) => (o.id === optId ? { ...o, isEditing: true } : o)));
+  };
+
+  // Generate Cartesian combinations for Variants Table
+  const generatedVariantCombinations = useMemo(() => {
+    const activeOptions = options.filter((o) => o.values.length > 0);
+    if (activeOptions.length === 0) return [];
+
+    let combinations: Record<string, string>[] = [{}];
+    activeOptions.forEach((opt) => {
+      const nextCombos: Record<string, string>[] = [];
+      combinations.forEach((prev) => {
+        opt.values.forEach((val) => {
+          nextCombos.push({ ...prev, [opt.name]: val });
+        });
+      });
+      combinations = nextCombos;
+    });
+
+    return combinations.map((combo, idx) => {
+      const title = Object.values(combo).join(' / ');
+      const existing = variantsList.find((v) => v.title === title || v.id === `var-${title.toLowerCase().replace(/[^a-z0-9]/g, '-')}`);
+      const skuSuffix = Object.values(combo)
+        .map((v) => v.slice(0, 3).toUpperCase())
+        .join('-');
+      return {
+        id: existing?.id || `var-${title.toLowerCase().replace(/[^a-z0-9]/g, '-') || idx}`,
+        title,
+        price: existing?.price !== undefined ? existing.price : price,
+        compareAtPrice: existing?.compareAtPrice !== undefined ? existing.compareAtPrice : compareAtPrice,
+        sku: existing?.sku || `${sku}-${skuSuffix}`,
+        inventory: existing?.inventory !== undefined ? existing.inventory : (availableQty || 100),
+        image: existing?.image || (images.length > 0 ? images[0] : undefined),
+        options: combo
+      };
+    });
+  }, [options, price, compareAtPrice, sku, variantsList, images, availableQty]);
+
+  const handleUpdateVariantPrice = (comboId: string, newPrice: number) => {
+    setVariantsList((prev) => {
+      const idx = prev.findIndex((v) => v.id === comboId);
+      if (idx > -1) {
+        const updated = [...prev];
+        updated[idx] = { ...updated[idx], price: newPrice };
+        return updated;
+      }
+      const combo = generatedVariantCombinations.find((c) => c.id === comboId);
+      if (combo) {
+        return [...prev, { ...combo, price: newPrice }];
+      }
+      return prev;
+    });
+    notifyChange();
+  };
+
+  const handleUpdateVariantInventory = (comboId: string, newInventory: number) => {
+    setVariantsList((prev) => {
+      const idx = prev.findIndex((v) => v.id === comboId);
+      if (idx > -1) {
+        const updated = [...prev];
+        updated[idx] = { ...updated[idx], inventory: newInventory };
+        return updated;
+      }
+      const combo = generatedVariantCombinations.find((c) => c.id === comboId);
+      if (combo) {
+        return [...prev, { ...combo, inventory: newInventory }];
+      }
+      return prev;
+    });
+    notifyChange();
+  };
+
+  const handleUpdateVariantSku = (comboId: string, newSku: string) => {
+    setVariantsList((prev) => {
+      const idx = prev.findIndex((v) => v.id === comboId);
+      if (idx > -1) {
+        const updated = [...prev];
+        updated[idx] = { ...updated[idx], sku: newSku };
+        return updated;
+      }
+      const combo = generatedVariantCombinations.find((c) => c.id === comboId);
+      if (combo) {
+        return [...prev, { ...combo, sku: newSku }];
+      }
+      return prev;
+    });
+    notifyChange();
+  };
+
+  const handleApplyBasePriceToAllVariants = () => {
+    setVariantsList(
+      generatedVariantCombinations.map((c) => ({
+        ...c,
+        price: price
+      }))
+    );
+    notifyChange();
+  };
+
+  const handleApplyBaseInventoryToAllVariants = () => {
+    setVariantsList(
+      generatedVariantCombinations.map((c) => ({
+        ...c,
+        inventory: availableQty
+      }))
+    );
+    notifyChange();
+  };
 
   // 10. CATEGORY METAFIELDS (EXACT FROM SHOPIFY PDF PAGE 2 & 3)
   const [material, setMaterial] = useState(
@@ -505,6 +884,125 @@ Easy to fold, store, and carry — ideal for office, home, classroom, and travel
   );
   const [isEditingSeo, setIsEditingSeo] = useState(false);
 
+  // DROPSHIP 1-CLICK IMPORTER STATE (CJ, ALIEXPRESS, 1688, ALIBABA, TAOBAO)
+  const [isDropshipQuickImportOpen, setIsDropshipQuickImportOpen] = useState(false);
+  const [dropshipUrlInput, setDropshipUrlInput] = useState('');
+  const [isDropshipFetching, setIsDropshipFetching] = useState(false);
+  const [dropshipExtractedData, setDropshipExtractedData] = useState<Product | null>(null);
+  const [dropshipSourcePriceText, setDropshipSourcePriceText] = useState('');
+  const [dropshipActiveImgIdx, setDropshipActiveImgIdx] = useState(0);
+
+  const handleFetchDropshipForEditor = async () => {
+    if (!dropshipUrlInput.trim()) {
+      showToast('অনুগ্রহ করে পণ্যের লিঙ্ক বা Product ID দিন');
+      return;
+    }
+    setIsDropshipFetching(true);
+    setDropshipExtractedData(null);
+    try {
+      const clean = dropshipUrlInput.trim();
+      const isCJ = clean.toLowerCase().includes('cjdropshipping') || clean.toLowerCase().includes('cjdropship') || /^\d{8,16}$/.test(clean);
+      const rule = getStoredPricingRule();
+      
+      if (isCJ) {
+        const cjConfig = getStoredCJConfig();
+        const res = await fetchCJProductData(clean, cjConfig, rule);
+        setDropshipExtractedData(res.product);
+        setDropshipSourcePriceText(`$${res.rawData.sourcePriceUSD} USD`);
+        setDropshipActiveImgIdx(0);
+        showToast('CJ Dropshipping পণ্য সফলভাবে ফেচ হয়েছে!');
+      } else {
+        const parsed = parseDropshipUrl(clean, undefined, rule);
+        setDropshipExtractedData(parsed.product);
+        setDropshipSourcePriceText(parsed.sourcePriceFormatted);
+        setDropshipActiveImgIdx(0);
+        showToast('ড্রপশিপ পণ্য সফলভাবে এক্সট্রাক্ট হয়েছে!');
+      }
+    } catch {
+      showToast('পণ্য ফেচ করতে সমস্যা হয়েছে। লিঙ্কটি পুনরায় চেক করুন।');
+    } finally {
+      setIsDropshipFetching(false);
+    }
+  };
+
+  const handleApplyDropshipProductToForm = (prod: Product) => {
+    setName(prod.name);
+    if (prod.category) {
+      setCategory(prod.category);
+    }
+    if (prod.brand) {
+      setBrand(prod.brand);
+      if (!customBrands.includes(prod.brand)) {
+        const updated = [...customBrands, prod.brand];
+        setCustomBrands(updated);
+        try {
+          localStorage.setItem('banglaxpress_custom_brands', JSON.stringify(updated));
+        } catch {}
+      }
+    }
+    if (prod.vendor) {
+      setVendor(prod.vendor);
+      if (!customVendors.includes(prod.vendor)) {
+        const updated = [...customVendors, prod.vendor];
+        setCustomVendors(updated);
+        try {
+          localStorage.setItem('banglaxpress_custom_vendors', JSON.stringify(updated));
+        } catch {}
+      }
+    }
+    if (prod.productType) {
+      setProductType(prod.productType);
+    }
+    if (prod.description) {
+      setDescription(prod.description);
+    }
+    if (prod.images && prod.images.length > 0) {
+      setImages(prod.images);
+    }
+    if (prod.price) {
+      setPrice(prod.price);
+    }
+    if (prod.originalPrice) {
+      setCompareAtPrice(prod.originalPrice);
+    }
+    if (prod.costPerItem) {
+      setCostPerItem(prod.costPerItem);
+    }
+    if (prod.stockCount) {
+      setAvailableQty(prod.stockCount);
+    }
+    if (prod.sku) {
+      setSku(prod.sku);
+    }
+    if (prod.features && prod.features.length > 0) {
+      setCategoryFeatures(prod.features);
+    }
+    if (prod.specifications) {
+      const specsStr = Object.entries(prod.specifications).map(([k, v]) => `${k}: ${v}`).join(' | ');
+      setSpecificationText(specsStr);
+    }
+    if (prod.warranty) {
+      setWarrantyText(prod.warranty);
+    }
+    if (prod.colors && prod.colors.length > 0) {
+      setVariantColors(prod.colors.map(c => c.name));
+    }
+    if (prod.weight) {
+      setWeight(prod.weight);
+    }
+    if (prod.countryOfOrigin) {
+      setCountryOfOrigin(prod.countryOfOrigin);
+    }
+    if (prod.seo) {
+      if (prod.seo.title) setSeoTitle(prod.seo.title);
+      if (prod.seo.description) setSeoDescription(prod.seo.description);
+      if (prod.seo.handle) setSeoHandle(prod.seo.handle);
+    }
+    setIsDropshipQuickImportOpen(false);
+    notifyChange();
+    showToast(`'${prod.name}' এর সব তথ্য ও ${prod.images?.length || 0}টি ছবি সফলভাবে এডিটরে লোড হয়েছে!`);
+  };
+
   // SAVE BAR / NOTIFICATION
   const [hasChanges, setHasChanges] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -536,6 +1034,26 @@ Easy to fold, store, and carry — ideal for office, home, classroom, and travel
     setIsTypeDropdownOpen(false);
     setNewTypeName('');
     showToast(`নতুন প্রোডাক্ট টাইপ '${trimmed}' সফলভাবে নির্ধারণ করা হয়েছে!`);
+    notifyChange();
+  };
+
+  const handleAddCustomBrand = (nameToAdd: string) => {
+    const trimmed = nameToAdd.trim();
+    if (!trimmed) return;
+    if (!customBrands.includes(trimmed)) {
+      const updated = [...customBrands, trimmed];
+      setCustomBrands(updated);
+      try {
+        localStorage.setItem('banglaxpress_custom_brands', JSON.stringify(updated));
+      } catch {
+        // ignore
+      }
+    }
+    setBrand(trimmed);
+    setIsNewBrandModalOpen(false);
+    setIsBrandDropdownOpen(false);
+    setNewBrandName('');
+    showToast(`নতুন ব্র্যান্ড '${trimmed}' সফলভাবে নির্ধারণ করা হয়েছে!`);
     notifyChange();
   };
 
@@ -737,6 +1255,7 @@ Easy to fold, store, and carry — ideal for office, home, classroom, and travel
     setStatus('active');
     setCategory('Laptop Stands in Computer Risers & Stands');
     setProductType('Laptop & Tablet Stand');
+    setBrand('Merrono');
     setVendor('Merrono');
     setCollections(['Computer & IT Accessories']);
     setTags(['Laptop & Tablet Stand']);
@@ -841,7 +1360,7 @@ Easy to fold, store, and carry — ideal for office, home, classroom, and travel
       soldCount: initialProduct?.soldCount || 34,
       isFlashDeal: initialProduct?.isFlashDeal ?? true,
       isFeatured: initialProduct?.isFeatured ?? true,
-      brand: vendor,
+      brand: brand.trim() || 'Merrono',
       sku: sku,
       shortDescription: description.slice(0, 160) + '...',
       description: description,
@@ -851,15 +1370,17 @@ Easy to fold, store, and carry — ideal for office, home, classroom, and travel
       features: categoryFeatures,
       specifications: specsRecord,
       warranty: warrantyText,
-      colors: variantColors.map((c) => ({
-        name: c,
-        hex:
-          c.toLowerCase() === 'orange'
-            ? '#ea580c'
-            : c.toLowerCase() === 'silver'
-            ? '#94a3b8'
-            : '#1e293b'
+      colors: (options.find((o) => o.name.toLowerCase() === 'color')?.values || variantColors).map((c) => ({
+        name: getDisplayNameForColor(c),
+        hex: getColorHex(c)
       })),
+      sizes: options.find((o) => o.name.toLowerCase() === 'size')?.values || initialProduct?.sizes,
+      options: options.map((opt) => ({
+        id: opt.id,
+        name: opt.name,
+        values: opt.values
+      })),
+      variants: generatedVariantCombinations,
       tags: tags,
 
       // Specific Shopify PDF Fields
@@ -881,15 +1402,18 @@ Easy to fold, store, and carry — ideal for office, home, classroom, and travel
       countryOfOrigin: countryOfOrigin,
       hsCode: hsCode,
       categoryMetafields: {
-        color: variantColors,
-        material: material,
+        color: options.find((o) => o.name.toLowerCase() === 'color')?.values || variantColors,
+        material: options.find((o) => o.name.toLowerCase() === 'fabric' || o.name.toLowerCase() === 'material')?.values.join(', ') || material,
         anglesSupported: anglesSupported,
         compatibleDevice: compatibleDevices,
         features: categoryFeatures,
         powerSource: powerSource,
         connectorGender: connectorGender,
         wirelessChargingStandard: wirelessStandard,
-        vesaMountingPattern: vesaPattern
+        vesaMountingPattern: vesaPattern,
+        neckline: options.find((o) => o.name.toLowerCase() === 'neckline')?.values.join(', '),
+        sleeveStyle: options.find((o) => o.name.toLowerCase().includes('sleeve'))?.values.join(', '),
+        decorationTechnique: options.find((o) => o.name.toLowerCase().includes('decoration'))?.values.join(', ')
       },
       productMetafields: {
         specification: specificationText,
@@ -946,6 +1470,16 @@ Easy to fold, store, and carry — ideal for office, home, classroom, and travel
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => setIsDropshipQuickImportOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95"
+            title="সিজে ড্রপশিপিং বা যেকোনো লিংক থেকে ১-ক্লিকে সব তথ্য ও ছবি লোড করুন"
+          >
+            <Zap className="w-3.5 h-3.5 text-amber-300 fill-current" />
+            <span>⚡ ড্রপশিপ ১-ক্লিক ইম্পোর্ট</span>
+          </button>
+
           <button
             type="button"
             onClick={handleLoadExactShopifyPDFPreset}
@@ -1575,74 +2109,607 @@ Easy to fold, store, and carry — ideal for office, home, classroom, and travel
             </div>
           </div>
 
-          {/* 8. VARIANTS CARD (PAGE 2) */}
-          <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-xs space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-bold text-gray-900">Variants</h3>
-              <button
-                type="button"
-                onClick={() => setHasVariants(!hasVariants)}
-                className="text-xs text-[#008060] font-semibold hover:underline"
-              >
-                + Add options like size or color
-              </button>
+          {/* 8. VARIANTS CARD (EXACT SHOPIFY POLARIS REPLICA MATCHING IMAGES 1 & 2) */}
+          <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs space-y-4 relative">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-3">
+              <div>
+                <h3 className="text-sm font-bold text-gray-900">Variants</h3>
+                <p className="text-xs text-gray-500">
+                  Add options like size or color to manage multi-attribute variants.
+                </p>
+              </div>
+
+              {/* Category Breadcrumb & Quick Recommendation Chips (from Image 1) */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[11px] font-bold text-gray-600 bg-gray-100 px-2.5 py-1 rounded-lg">
+                  {productType || 'T-Shirts'} <span className="text-gray-400 font-normal">in</span> {category || 'Clothing Tops'}
+                </span>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {CATEGORY_SUGGESTIONS.map((sug) => {
+                    const alreadyAdded = options.some((o) => o.name.toLowerCase() === sug.toLowerCase());
+                    if (alreadyAdded) return null;
+                    return (
+                      <button
+                        key={sug}
+                        type="button"
+                        onClick={() => handleAddOptionByName(sug)}
+                        className="text-[11px] font-semibold text-gray-600 hover:text-gray-900 bg-gray-100 hover:bg-gray-200 px-2 py-0.5 rounded-md transition-colors cursor-pointer border border-gray-200 flex items-center gap-1"
+                      >
+                        <Plus className="w-3 h-3" />
+                        <span>{sug}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
 
-            {hasVariants && (
-              <div className="space-y-3">
-                <div className="p-3 bg-gray-50 rounded-lg border border-gray-200 space-y-2">
-                  <span className="text-[11px] font-bold text-gray-600 uppercase">
-                    Option 1: Color
-                  </span>
-                  <div className="flex flex-wrap items-center gap-2">
-                    {variantColors.map((col, idx) => (
-                      <span
-                        key={idx}
-                        className="px-3 py-1 rounded-full text-xs font-semibold bg-white border border-gray-300 text-gray-800 flex items-center gap-1.5 shadow-2xs"
-                      >
-                        <span
-                          className="w-2.5 h-2.5 rounded-full border border-black/20"
-                          style={{
-                            backgroundColor:
-                              col.toLowerCase() === 'orange'
-                                ? '#ea580c'
-                                : col.toLowerCase() === 'silver'
-                                ? '#cbd5e1'
-                                : '#0f172a'
-                          }}
-                        />
-                        <span>{col}</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setVariantColors(variantColors.filter((c) => c !== col));
-                            notifyChange();
-                          }}
-                          className="text-gray-400 hover:text-rose-600 ml-1"
-                        >
-                          ×
-                        </button>
-                      </span>
-                    ))}
-
-                    <div className="flex items-center gap-1">
+            {/* Helper to render the option picker popover right where it was triggered */}
+            {(() => {
+              const renderOptionPickerPopover = () => {
+                if (!showOptionPicker) return null;
+                const filtered = RECOMMENDED_OPTIONS.filter((opt) =>
+                  opt.toLowerCase().includes(optionSearchQuery.toLowerCase())
+                );
+                return (
+                  <div className="absolute z-50 left-0 top-full mt-2 w-72 bg-white rounded-xl shadow-2xl border border-gray-200 p-2.5 space-y-2 animate-in fade-in zoom-in-95">
+                    {/* Search Input */}
+                    <div className="relative">
+                      <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
                       <input
                         type="text"
-                        value={newColorInput}
-                        onChange={(e) => setNewColorInput(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddColor())}
-                        placeholder="Add color..."
-                        className="w-24 px-2 py-1 text-xs border border-gray-300 rounded outline-none focus:border-[#008060]"
+                        value={optionSearchQuery}
+                        onChange={(e) => setOptionSearchQuery(e.target.value)}
+                        placeholder="Search"
+                        autoFocus
+                        className="w-full pl-8 pr-7 py-1.5 text-xs border border-blue-600 rounded-lg outline-none ring-2 ring-blue-100 font-medium"
                       />
-                      <button
-                        type="button"
-                        onClick={handleAddColor}
-                        className="px-2 py-1 bg-gray-200 hover:bg-gray-300 text-gray-700 text-xs font-bold rounded"
-                      >
-                        +
-                      </button>
+                      {optionSearchQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setOptionSearchQuery('')}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Recommended Header */}
+                    <div className="text-[11px] font-bold text-gray-500 px-2 pt-1 uppercase tracking-wider">
+                      Recommended
+                    </div>
+
+                    {/* Recommended List */}
+                    <div className="max-h-56 overflow-y-auto space-y-0.5 scrollbar-thin">
+                      {filtered.map((optName) => {
+                        const isAdded = options.some((o) => o.name.toLowerCase() === optName.toLowerCase());
+                        return (
+                          <button
+                            key={optName}
+                            type="button"
+                            onClick={() => handleAddOptionByName(optName)}
+                            disabled={isAdded}
+                            className={`w-full text-left px-3 py-1.5 text-xs rounded-lg transition-colors flex items-center justify-between cursor-pointer ${
+                              isAdded
+                                ? 'text-gray-400 bg-gray-50 cursor-not-allowed'
+                                : 'text-gray-800 hover:bg-gray-100 font-medium'
+                            }`}
+                          >
+                            <span>{optName}</span>
+                            {isAdded && <span className="text-[10px] text-gray-400">Added</span>}
+                          </button>
+                        );
+                      })}
+                      {filtered.length === 0 && (
+                        <p className="text-xs text-gray-400 px-2 py-1">No options match "{optionSearchQuery}"</p>
+                      )}
+                    </div>
+
+                    {/* Create Custom Option */}
+                    <div className="pt-2 border-t border-gray-100">
+                      {optionSearchQuery.trim() ? (
+                        <button
+                          type="button"
+                          onClick={() => handleAddOptionByName(optionSearchQuery.trim())}
+                          className="w-full text-left px-2 py-1.5 text-xs font-semibold text-blue-600 hover:bg-blue-50 rounded-lg flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>Create custom option "{optionSearchQuery.trim()}"</span>
+                        </button>
+                      ) : (
+                        <div className="flex items-center gap-1.5 px-1">
+                          <input
+                            type="text"
+                            value={customOptionName}
+                            onChange={(e) => setCustomOptionName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleAddOptionByName(customOptionName);
+                              }
+                            }}
+                            placeholder="Custom option name..."
+                            className="flex-1 px-2.5 py-1 text-xs border border-gray-200 rounded-lg outline-none focus:border-blue-600"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleAddOptionByName(customOptionName)}
+                            disabled={!customOptionName.trim()}
+                            className="px-2.5 py-1 bg-gray-900 text-white rounded-lg text-xs font-bold disabled:opacity-40 cursor-pointer"
+                          >
+                            Add
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
+                );
+              };
+
+              return (
+                <>
+                  {/* If no options yet, show + Add options like size or color button */}
+                  {options.length === 0 && (
+                    <div className="relative pt-2 inline-block">
+                      <button
+                        type="button"
+                        onClick={() => setShowOptionPicker(!showOptionPicker)}
+                        className="inline-flex items-center gap-2 text-xs font-bold text-blue-600 hover:text-blue-700 hover:underline cursor-pointer"
+                      >
+                        <Plus className="w-4 h-4" />
+                        <span>Add options like size or color</span>
+                      </button>
+                      {renderOptionPickerPopover()}
+                    </div>
+                  )}
+
+                  {/* LIST OF OPTIONS (EXACT TO SHOPIFY SCREENSHOT) */}
+                  {options.length > 0 && (
+                    <div className="space-y-3 pt-1">
+                      {options.map((opt) => (
+                        <div key={opt.id}>
+                          {opt.isEditing ? (
+                            /* ACTIVE OPTION EDITING CARD (EXACT AS IMAGE 2) */
+                            <div className="border border-gray-200 rounded-xl p-4 bg-white space-y-3.5 shadow-2xs">
+                              {/* Top Row with Drag Handle, Label, and Pill Badge */}
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <GripVertical className="w-4 h-4 text-gray-400 cursor-grab" />
+                                  <label className="text-xs font-bold text-gray-800">Option name</label>
+                                </div>
+                                <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-sky-50 text-sky-700 border border-sky-200 flex items-center gap-1.5">
+                                  <Database className="w-3 h-3 text-sky-600" />
+                                  <span>{opt.name}</span>
+                                </span>
+                              </div>
+
+                              {/* Option Name Input */}
+                              <input
+                                type="text"
+                                value={opt.name}
+                                onChange={(e) => handleUpdateOptionName(opt.id, e.target.value)}
+                                className="w-full px-3.5 py-2 text-xs border border-gray-300 rounded-xl outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-100 font-medium bg-white"
+                                placeholder="Option name (e.g. Size)"
+                              />
+
+                              {/* Value Input and Tags */}
+                              <div className="space-y-2.5">
+                                <div className="flex items-center justify-between">
+                                  <label className="text-xs font-bold text-gray-800">Option values</label>
+                                  {opt.name.toLowerCase() === 'color' && (
+                                    <span className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                                      <Sparkles className="w-3 h-3 text-amber-500" />
+                                      <span>HEX Auto-detect Active</span>
+                                    </span>
+                                  )}
+                                </div>
+
+                                {/* Existing Values Badges */}
+                                {opt.values.length > 0 && (
+                                  <div className="flex flex-wrap items-center gap-1.5 p-2 bg-gray-50/80 rounded-xl border border-gray-200">
+                                    {opt.values.map((val, vIdx) => {
+                                      const isColor = opt.name.toLowerCase() === 'color';
+                                      const colorHex = isColor ? getColorHex(val) : '';
+                                      const analysis = isColor ? detectColorName(val) : null;
+                                      const displayName = isColor ? getDisplayNameForColor(val) : val;
+
+                                      return (
+                                        <span
+                                          key={vIdx}
+                                          className="px-3 py-1 bg-white border border-gray-300 rounded-lg text-xs font-semibold text-gray-800 flex items-center gap-2 shadow-2xs group relative"
+                                          title={
+                                            analysis
+                                              ? `${analysis.name} (${analysis.hex}): ${analysis.description}`
+                                              : val
+                                          }
+                                        >
+                                          {isColor && (
+                                            <span
+                                              className="w-3.5 h-3.5 rounded-full border border-black/20 shrink-0 shadow-2xs"
+                                              style={{ backgroundColor: colorHex }}
+                                            />
+                                          )}
+                                          <span>{displayName}</span>
+                                          {isColor && (
+                                            <span className="font-mono text-[10px] text-gray-500 font-bold uppercase bg-gray-50 px-1 py-0.2 rounded border border-gray-200">
+                                              {colorHex}
+                                            </span>
+                                          )}
+                                          <button
+                                            type="button"
+                                            onClick={() => handleRemoveOptionValue(opt.id, val)}
+                                            className="text-gray-400 hover:text-rose-600 transition-colors cursor-pointer text-base leading-none font-bold ml-0.5"
+                                            title="Remove value"
+                                          >
+                                            ×
+                                          </button>
+                                        </span>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+
+                                {/* Input to Add Values */}
+                                {(() => {
+                                  const isColor = opt.name.toLowerCase() === 'color';
+                                  const currentVal = editingOptionValues[opt.id]?.trim() || '';
+                                  const analysis = isColor && currentVal ? detectColorName(currentVal) : null;
+
+                                  return (
+                                    <div className="space-y-2">
+                                      <div className="flex items-center gap-2">
+                                        {/* Color Palette / Picker Trigger */}
+                                        {isColor && (
+                                          <div
+                                            className="relative shrink-0 flex items-center"
+                                            title="Click to pick a color or enter HEX code"
+                                          >
+                                            <input
+                                              type="color"
+                                              value={analysis ? analysis.hex : '#F54927'}
+                                              onChange={(e) => {
+                                                const hexVal = e.target.value.toUpperCase();
+                                                setEditingOptionValues({
+                                                  ...editingOptionValues,
+                                                  [opt.id]: hexVal
+                                                });
+                                              }}
+                                              className="w-9 h-9 rounded-xl border border-gray-300 p-0.5 bg-white shadow-2xs cursor-pointer hover:border-gray-400 transition-all"
+                                            />
+                                          </div>
+                                        )}
+
+                                        <input
+                                          type="text"
+                                          value={editingOptionValues[opt.id] || ''}
+                                          onChange={(e) =>
+                                            setEditingOptionValues({
+                                              ...editingOptionValues,
+                                              [opt.id]: e.target.value
+                                            })
+                                          }
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter' || e.key === ',') {
+                                              e.preventDefault();
+                                              handleAddOptionValue(opt.id);
+                                            }
+                                          }}
+                                          placeholder={
+                                            isColor
+                                              ? 'Enter color name or HEX (e.g. #F54927, Red, Navy Blue)'
+                                              : `Add ${opt.name.toLowerCase()}`
+                                          }
+                                          className="flex-1 px-3.5 py-2 text-xs border border-gray-300 rounded-xl outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-100 bg-white"
+                                        />
+
+                                        <button
+                                          type="button"
+                                          onClick={() => handleAddOptionValue(opt.id)}
+                                          disabled={!editingOptionValues[opt.id]?.trim()}
+                                          className="px-3.5 py-2 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-xl text-xs font-bold border border-gray-300 disabled:opacity-40 transition-colors cursor-pointer"
+                                        >
+                                          Add
+                                        </button>
+                                      </div>
+
+                                      {/* Live Color HEX Auto-Detection Card */}
+                                      {isColor && analysis && currentVal && (
+                                        <div className="p-3 bg-gradient-to-r from-amber-50 via-orange-50/70 to-rose-50/70 rounded-xl border border-amber-300 shadow-xs space-y-2 animate-in fade-in zoom-in-95 duration-150">
+                                          <div className="flex items-center justify-between flex-wrap gap-2">
+                                            <div className="flex items-center gap-2.5">
+                                              <div
+                                                className="w-8 h-8 rounded-full border-2 border-white shadow-sm shrink-0 ring-2 ring-black/15"
+                                                style={{ backgroundColor: analysis.hex }}
+                                              />
+                                              <div>
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                  <span className="text-xs font-black text-gray-900">
+                                                    {analysis.name}
+                                                  </span>
+                                                  <span className="font-mono text-[11px] font-bold px-1.5 py-0.5 rounded bg-white border border-gray-200 text-gray-800 shadow-2xs">
+                                                    {analysis.hex}
+                                                  </span>
+                                                  {analysis.alias && (
+                                                    <span className="text-[10px] text-gray-500 font-semibold">
+                                                      (or {analysis.alias})
+                                                    </span>
+                                                  )}
+                                                </div>
+                                                <p className="text-[11px] text-amber-950 font-semibold leading-tight mt-0.5">
+                                                  {getColorSummaryStatement(currentVal)}
+                                                </p>
+                                                {analysis.banglaName && (
+                                                  <p className="text-[10px] text-gray-500 mt-0.5">
+                                                    {analysis.banglaName}
+                                                  </p>
+                                                )}
+                                              </div>
+                                            </div>
+                                            <span className="text-[10px] font-bold text-amber-800 bg-amber-100/90 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                              <Sparkles className="w-3 h-3 text-amber-600" />
+                                              Auto-detected
+                                            </span>
+                                          </div>
+
+                                          {/* 1-Click Action Add Buttons */}
+                                          <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-amber-200/60">
+                                            <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">
+                                              Add as:
+                                            </span>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleAddSpecificValue(opt.id, analysis.name)}
+                                              className="px-2.5 py-1 rounded-lg bg-white hover:bg-gray-50 border border-gray-300 text-xs font-bold text-gray-800 shadow-2xs cursor-pointer transition-colors"
+                                            >
+                                              "{analysis.name}"
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                handleAddSpecificValue(opt.id, `${analysis.name} (${analysis.hex})`)
+                                              }
+                                              className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-2xs cursor-pointer transition-colors"
+                                            >
+                                              "{analysis.name} ({analysis.hex})"
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleAddSpecificValue(opt.id, analysis.hex)}
+                                              className="px-2.5 py-1 rounded-lg bg-white hover:bg-gray-50 border border-gray-300 text-xs font-mono font-bold text-gray-800 shadow-2xs cursor-pointer transition-colors"
+                                            >
+                                              "{analysis.hex}"
+                                            </button>
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {/* Quick HEX Palette Suggestions */}
+                                      {isColor && (
+                                        <div className="pt-0.5 space-y-1">
+                                          <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider block">
+                                            HEX Palette Suggestions (Auto-detect):
+                                          </span>
+                                          <div className="flex items-center gap-1.5 flex-wrap">
+                                            {[
+                                              { hex: '#F54927', name: 'Bright Red-Orange (Vermilion)' },
+                                              { hex: '#EA580C', name: 'Orange' },
+                                              { hex: '#1E293B', name: 'Midnight Black' },
+                                              { hex: '#94A3B8', name: 'Silver' },
+                                              { hex: '#2563EB', name: 'Royal Blue' },
+                                              { hex: '#10B981', name: 'Emerald Green' },
+                                              { hex: '#E0A99E', name: 'Rose Gold' },
+                                              { hex: '#7FD1B9', name: 'Mint Paste' },
+                                              { hex: '#FFFFFF', name: 'White' },
+                                              { hex: '#BE123C', name: 'Ruby Red' }
+                                            ].map((sw) => (
+                                              <button
+                                                key={sw.hex}
+                                                type="button"
+                                                onClick={() => {
+                                                  setEditingOptionValues({
+                                                    ...editingOptionValues,
+                                                    [opt.id]: sw.hex
+                                                  });
+                                                }}
+                                                title={`${sw.name} (${sw.hex})`}
+                                                className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg border text-xs font-medium shadow-2xs cursor-pointer transition-all hover:scale-105 ${
+                                                  currentVal.toUpperCase() === sw.hex
+                                                    ? 'bg-amber-100 border-amber-400 text-amber-900 font-bold ring-1 ring-amber-300'
+                                                    : 'bg-white hover:bg-gray-50 border-gray-200 text-gray-700'
+                                                }`}
+                                              >
+                                                <span
+                                                  className="w-2.5 h-2.5 rounded-full border border-black/20 shrink-0"
+                                                  style={{ backgroundColor: sw.hex }}
+                                                />
+                                                <span className="font-mono text-[10px]">{sw.hex}</span>
+                                              </button>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      <p className="text-[11px] text-gray-400">
+                                        Type value and press Enter or comma (e.g.{' '}
+                                        {opt.name.toLowerCase() === 'size'
+                                          ? 'S, M, L, XL'
+                                          : opt.name.toLowerCase() === 'color'
+                                          ? '#F54927, Black, Navy Blue, Silver'
+                                          : opt.name.toLowerCase().includes('feature')
+                                          ? 'Foldable, Waterproof, Lightweight'
+                                          : 'Option 1, Option 2'}
+                                        )
+                                      </p>
+                                    </div>
+                                  );
+                                })()}
+                              </div>
+
+                              {/* Action Buttons: Delete (left) and Done (right) - Exactly as Image 2 */}
+                              <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteOption(opt.id)}
+                                  className="px-3.5 py-1.5 text-xs font-bold text-red-600 hover:text-red-700 hover:bg-red-50 rounded-xl transition-colors cursor-pointer"
+                                >
+                                  Delete
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleDoneOption(opt.id)}
+                                  className="px-6 py-1.5 bg-[#1a1a1a] hover:bg-black text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
+                                >
+                                  Done
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            /* COLLAPSED OPTION SUMMARY VIEW */
+                            <div className="border border-gray-200 rounded-xl p-3.5 bg-white flex items-center justify-between shadow-2xs hover:border-gray-300 transition-all">
+                              <div className="flex items-center gap-3">
+                                <GripVertical className="w-4 h-4 text-gray-400 cursor-grab" />
+                                <div>
+                                  <div className="text-xs font-bold text-gray-900 flex items-center gap-2">
+                                    <span>{opt.name}</span>
+                                    <span className="text-[10px] text-gray-400 font-normal">
+                                      ({opt.values.length} values)
+                                    </span>
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                                    {opt.values.map((v, i) => (
+                                      <span
+                                        key={i}
+                                        className="px-2.5 py-0.5 bg-gray-100 border border-gray-200 rounded-md text-[11px] font-semibold text-gray-800"
+                                      >
+                                        {v}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleEditOption(opt.id)}
+                                className="px-3.5 py-1 text-xs font-bold text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                              >
+                                Edit
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+
+                      {/* + Add another option button below (Image 2) */}
+                      <div className="pt-2 relative inline-block">
+                        <button
+                          type="button"
+                          onClick={() => setShowOptionPicker(!showOptionPicker)}
+                          className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-700 hover:underline cursor-pointer"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>Add another option</span>
+                        </button>
+                        {renderOptionPickerPopover()}
+                      </div>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+
+            {/* GENERATED VARIANTS MATRIX TABLE */}
+            {generatedVariantCombinations.length > 0 && (
+              <div className="mt-4 pt-4 border-t border-gray-200 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <h4 className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
+                      <Sliders className="w-3.5 h-3.5 text-blue-600" />
+                      <span>
+                        Generated Variants ({generatedVariantCombinations.length} combinations)
+                      </span>
+                    </h4>
+                    <span className="text-[11px] text-gray-500">
+                      Individual prices and inventory tracking per variant combination
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleApplyBasePriceToAllVariants}
+                      className="text-[11px] font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 px-2.5 py-1 rounded-lg border border-gray-300 transition-colors cursor-pointer"
+                    >
+                      Apply price (৳{price}) to all
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleApplyBaseInventoryToAllVariants}
+                      className="text-[11px] font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 px-2.5 py-1 rounded-lg border border-gray-300 transition-colors cursor-pointer"
+                    >
+                      Apply stock ({availableQty}) to all
+                    </button>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto rounded-xl border border-gray-200">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-gray-50 text-gray-600 font-bold border-b border-gray-200">
+                      <tr>
+                        <th className="py-2.5 px-3">Variant</th>
+                        <th className="py-2.5 px-3">Price (৳)</th>
+                        <th className="py-2.5 px-3">Available</th>
+                        <th className="py-2.5 px-3">SKU</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 bg-white">
+                      {generatedVariantCombinations.map((combo) => (
+                        <tr key={combo.id} className="hover:bg-gray-50/70 transition-colors">
+                          <td className="py-2 px-3 font-semibold text-gray-900">
+                            <div className="flex items-center gap-2">
+                              <span className="w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center text-[10px] text-gray-700 font-bold border border-gray-200 shrink-0">
+                                {combo.title.slice(0, 2).toUpperCase()}
+                              </span>
+                              <span className="text-xs">{combo.title}</span>
+                            </div>
+                          </td>
+                          <td className="py-2 px-3">
+                            <div className="flex items-center gap-1 font-mono">
+                              <span className="text-gray-400 text-xs">৳</span>
+                              <input
+                                type="number"
+                                value={combo.price}
+                                onChange={(e) => handleUpdateVariantPrice(combo.id, Number(e.target.value))}
+                                className="w-24 px-2 py-1 text-xs font-bold font-mono border border-gray-300 rounded-lg outline-none focus:border-blue-600 text-emerald-700 bg-white"
+                              />
+                            </div>
+                          </td>
+                          <td className="py-2 px-3 font-mono">
+                            <input
+                              type="number"
+                              value={combo.inventory}
+                              onChange={(e) => handleUpdateVariantInventory(combo.id, Number(e.target.value))}
+                              className="w-20 px-2 py-1 text-xs font-mono border border-gray-300 rounded-lg outline-none focus:border-blue-600 text-gray-800 bg-white"
+                            />
+                          </td>
+                          <td className="py-2 px-3 font-mono">
+                            <input
+                              type="text"
+                              value={combo.sku}
+                              onChange={(e) => handleUpdateVariantSku(combo.id, e.target.value)}
+                              className="w-32 px-2 py-1 text-xs font-mono border border-gray-300 rounded-lg outline-none focus:border-blue-600 text-gray-600 bg-white"
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {generatedVariantCombinations.length > 25 && (
+                    <div className="p-2 text-center bg-gray-50 text-[11px] text-gray-500 border-t border-gray-100 font-medium">
+                      Showing all {generatedVariantCombinations.length} total variants.
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -1667,9 +2734,14 @@ Easy to fold, store, and carry — ideal for office, home, classroom, and travel
                   {variantColors.map((col, idx) => (
                     <span
                       key={idx}
-                      className="px-2 py-0.5 rounded text-[11px] bg-white border border-gray-300 font-medium"
+                      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] bg-white border border-gray-300 font-medium text-gray-800"
                     >
-                      {col}
+                      <span
+                        className="w-2.5 h-2.5 rounded-full border border-black/20 shrink-0"
+                        style={{ backgroundColor: getColorHex(col) }}
+                      />
+                      <span>{col}</span>
+                      <span className="font-mono text-[9px] text-gray-500 uppercase">{getColorHex(col)}</span>
                     </span>
                   ))}
                 </div>
@@ -1750,41 +2822,89 @@ Easy to fold, store, and carry — ideal for office, home, classroom, and travel
               </div>
 
               {/* Features (Page 3) */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-center">
-                <label className="text-xs font-medium text-gray-600">Features</label>
-                <div className="sm:col-span-2 flex flex-wrap gap-1.5 p-2 rounded-lg border border-gray-200 bg-gray-50/50">
-                  {categoryFeatures.map((feat, idx) => (
-                    <span
-                      key={idx}
-                      className="px-2 py-0.5 rounded text-[11px] bg-white border border-gray-300 font-medium flex items-center gap-1"
-                    >
-                      <span>{feat}</span>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-start">
+                <div>
+                  <label className="text-xs font-bold text-gray-700">Features</label>
+                  <p className="text-[10.5px] text-gray-400 mt-0.5">Key product highlights</p>
+                </div>
+                <div className="sm:col-span-2 space-y-2">
+                  <div className="flex flex-wrap gap-1.5 p-2.5 rounded-xl border border-gray-200 bg-gray-50/70 min-h-[42px] items-center">
+                    {categoryFeatures.map((feat, idx) => (
+                      <span
+                        key={idx}
+                        className="px-2.5 py-1 rounded-lg text-xs bg-white border border-gray-300 font-semibold text-gray-800 flex items-center gap-1.5 shadow-2xs"
+                      >
+                        <Sparkles className="w-3 h-3 text-amber-500" />
+                        <span>{feat}</span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setCategoryFeatures(categoryFeatures.filter((f) => f !== feat))
+                          }
+                          className="text-gray-400 hover:text-rose-600 cursor-pointer ml-0.5"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="text"
+                        value={newFeatureInput}
+                        onChange={(e) => setNewFeatureInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && newFeatureInput.trim()) {
+                            e.preventDefault();
+                            if (!categoryFeatures.includes(newFeatureInput.trim())) {
+                              setCategoryFeatures([...categoryFeatures, newFeatureInput.trim()]);
+                            }
+                            setNewFeatureInput('');
+                          }
+                        }}
+                        placeholder="+ Add custom feature..."
+                        className="w-36 px-2 py-1 text-xs border border-gray-300 rounded-lg outline-none focus:border-blue-600 bg-white"
+                      />
                       <button
                         type="button"
-                        onClick={() =>
-                          setCategoryFeatures(categoryFeatures.filter((f) => f !== feat))
-                        }
-                        className="text-gray-400 hover:text-rose-600"
+                        onClick={() => {
+                          if (newFeatureInput.trim() && !categoryFeatures.includes(newFeatureInput.trim())) {
+                            setCategoryFeatures([...categoryFeatures, newFeatureInput.trim()]);
+                            setNewFeatureInput('');
+                          }
+                        }}
+                        disabled={!newFeatureInput.trim()}
+                        className="px-2.5 py-1 text-xs font-bold bg-gray-900 text-white rounded-lg disabled:opacity-40 cursor-pointer"
                       >
-                        ×
+                        Add
                       </button>
-                    </span>
-                  ))}
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="text"
-                      value={newFeatureInput}
-                      onChange={(e) => setNewFeatureInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && newFeatureInput.trim()) {
-                          e.preventDefault();
-                          setCategoryFeatures([...categoryFeatures, newFeatureInput.trim()]);
-                          setNewFeatureInput('');
-                        }
-                      }}
-                      placeholder="+ Feature..."
-                      className="w-24 px-1.5 py-0.5 text-[11px] border border-gray-300 rounded outline-none"
-                    />
+                    </div>
+                  </div>
+
+                  {/* Feature Quick Recommendation Pills */}
+                  <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                    <span className="text-[10.5px] font-bold text-gray-400 uppercase tracking-wider">Quick Suggestions:</span>
+                    {[
+                      'Multi-Device Compatibility',
+                      'Foldable & Portable',
+                      'Adjustable Viewing Angle',
+                      'Premium Aluminum Alloy',
+                      'Lightweight',
+                      'Anti-Slip Silicone Pads',
+                      'Fast Heat Dissipation'
+                    ].map((sug) => {
+                      if (categoryFeatures.includes(sug)) return null;
+                      return (
+                        <button
+                          key={sug}
+                          type="button"
+                          onClick={() => setCategoryFeatures([...categoryFeatures, sug])}
+                          className="text-[11px] font-medium text-gray-600 hover:text-blue-700 bg-white hover:bg-blue-50 px-2 py-0.5 rounded-md border border-gray-200 transition-colors flex items-center gap-1 cursor-pointer"
+                        >
+                          <Plus className="w-2.5 h-2.5" />
+                          <span>{sug}</span>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -2265,13 +3385,158 @@ Easy to fold, store, and carry — ideal for office, home, classroom, and travel
               </div>
             </div>
 
+            {/* Brand (Dedicated Option) */}
+            <div className="relative">
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-[11px] font-bold text-gray-700 flex items-center gap-1.5">
+                  <Award className="w-3 h-3 text-[#008060]" />
+                  <span>Brand</span>
+                  <span className="text-[10px] font-normal text-gray-400 font-sans">(ব্র্যান্ড)</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewBrandName('');
+                    setIsNewBrandModalOpen(true);
+                  }}
+                  className="text-[10px] font-bold text-[#008060] hover:text-[#004e3a] flex items-center gap-0.5 cursor-pointer bg-emerald-50 hover:bg-emerald-100 px-2 py-0.5 rounded border border-emerald-200 transition-colors"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>নতুন ব্র্যান্ড</span>
+                </button>
+              </div>
+
+              <div className="relative">
+                <div className="flex gap-1">
+                  <input
+                    type="text"
+                    value={brand}
+                    onChange={(e) => {
+                      setBrand(e.target.value);
+                      notifyChange();
+                    }}
+                    placeholder="যেমন: Merrono, Apple, Samsung..."
+                    className="flex-1 px-3 py-1.5 text-xs border border-gray-300 rounded-lg outline-none focus:border-[#008060] focus:ring-1 focus:ring-[#008060]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsBrandDropdownOpen((prev) => !prev);
+                      setBrandSearchQuery('');
+                    }}
+                    className="px-2.5 py-1.5 bg-gray-50 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors text-xs flex items-center gap-1 cursor-pointer"
+                    title="তালিকা থেকে ব্র্যান্ড বেছে নিন"
+                  >
+                    <ChevronDown className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {/* Brand Dropdown */}
+                {isBrandDropdownOpen && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-20"
+                      onClick={() => setIsBrandDropdownOpen(false)}
+                    />
+                    <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-30 overflow-hidden animate-in fade-in zoom-in-95 duration-100">
+                      <div className="p-2 border-b border-gray-100 bg-gray-50/70">
+                        <div className="relative">
+                          <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                          <input
+                            type="text"
+                            value={brandSearchQuery}
+                            onChange={(e) => setBrandSearchQuery(e.target.value)}
+                            placeholder="ব্র্যান্ড খুঁজুন..."
+                            className="w-full pl-8 pr-2.5 py-1 text-xs border border-gray-200 rounded-md outline-none focus:border-[#008060] bg-white"
+                            autoFocus
+                          />
+                        </div>
+                      </div>
+
+                      <div className="max-h-48 overflow-y-auto divide-y divide-gray-50 py-1">
+                        {availableBrandsList
+                          .filter((b) =>
+                            b.toLowerCase().includes(brandSearchQuery.toLowerCase())
+                          )
+                          .map((b, idx) => {
+                            const isSelected = brand.toLowerCase() === b.toLowerCase();
+                            return (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => {
+                                  setBrand(b);
+                                  setIsBrandDropdownOpen(false);
+                                  notifyChange();
+                                }}
+                                className={`w-full text-left px-3 py-1.5 text-xs flex items-center justify-between hover:bg-emerald-50/70 transition-colors ${
+                                  isSelected ? 'font-bold text-[#008060] bg-emerald-50/40' : 'text-gray-700'
+                                }`}
+                              >
+                                <span className="truncate">{b}</span>
+                                {isSelected && <Check className="w-3.5 h-3.5 text-[#008060] shrink-0" />}
+                              </button>
+                            );
+                          })}
+
+                        {availableBrandsList.filter((b) =>
+                          b.toLowerCase().includes(brandSearchQuery.toLowerCase())
+                        ).length === 0 && (
+                          <div className="p-3 text-center text-xs text-gray-400">
+                            কোনো ব্র্যান্ড পাওয়া যায়নি
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="p-2 border-t border-gray-100 bg-gray-50 flex items-center justify-between">
+                        <span className="text-[10px] text-gray-500">মোট {availableBrandsList.length} টি ব্র্যান্ড</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsBrandDropdownOpen(false);
+                            setNewBrandName(brandSearchQuery || '');
+                            setIsNewBrandModalOpen(true);
+                          }}
+                          className="text-[11px] font-bold text-[#008060] hover:text-[#004e3a] flex items-center gap-1 cursor-pointer"
+                        >
+                          <Plus className="w-3 h-3" />
+                          <span>+ নতুন ব্র্যান্ড তৈরি করুন</span>
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Quick Brand suggestions */}
+              <div className="flex flex-wrap gap-1 mt-1.5">
+                {availableBrandsList.slice(0, 5).map((b, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => {
+                      setBrand(b);
+                      notifyChange();
+                    }}
+                    className={`text-[10px] px-2 py-0.5 rounded border transition-all cursor-pointer ${
+                      brand === b
+                        ? 'bg-emerald-50 text-[#008060] border-emerald-300 font-bold'
+                        : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100 hover:text-gray-900'
+                    }`}
+                  >
+                    {b}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Vendor */}
             <div className="relative">
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-[11px] font-bold text-gray-700 flex items-center gap-1.5">
                   <Package className="w-3 h-3 text-[#008060]" />
                   <span>Vendor</span>
-                  <span className="text-[10px] font-normal text-gray-400 font-sans">(ব্র্যান্ড / সাপ্লায়ার)</span>
+                  <span className="text-[10px] font-normal text-gray-400 font-sans">(সাপ্লায়ার / ভেন্ডর)</span>
                 </label>
                 <button
                   type="button"
@@ -3035,6 +4300,95 @@ Easy to fold, store, and carry — ideal for office, home, classroom, and travel
         </div>
       )}
 
+      {/* NEW BRAND MODAL */}
+      {isNewBrandModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-gray-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between bg-emerald-50/50">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                  <Award className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900">নতুন ব্র্যান্ড যোগ করুন</h3>
+                  <p className="text-[11px] text-gray-500">Add custom product brand name</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsNewBrandModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleAddCustomBrand(newBrandName);
+              }}
+              className="p-5 space-y-4"
+            >
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1">
+                  ব্র্যান্ডের নাম <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newBrandName}
+                  onChange={(e) => setNewBrandName(e.target.value)}
+                  placeholder="যেমন: Merrono, Apple, Samsung, Anker, Sony, No Brand"
+                  className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg outline-none focus:border-[#008060] focus:ring-1 focus:ring-[#008060]"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-gray-500 mb-1.5">
+                  জনপ্রিয় ব্র্যান্ড তালিকা থেকে বেছে নিন:
+                </label>
+                <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-1 bg-gray-50 rounded-lg border border-gray-100">
+                  {availableBrandsList.map((b, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setNewBrandName(b)}
+                      className={`text-[11px] px-2.5 py-1 rounded-md border transition-all cursor-pointer ${
+                        newBrandName === b
+                          ? 'bg-emerald-100 text-emerald-800 border-emerald-300 font-bold'
+                          : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-100'
+                      }`}
+                    >
+                      {b}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setIsNewBrandModalOpen(false)}
+                  className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-lg cursor-pointer"
+                >
+                  বাতিল
+                </button>
+                <button
+                  type="submit"
+                  disabled={!newBrandName.trim()}
+                  className="px-5 py-2 text-xs font-bold text-white bg-[#008060] hover:bg-[#006e52] disabled:opacity-50 disabled:cursor-not-allowed rounded-lg shadow-sm flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>ব্র্যান্ড যুক্ত ও সিলেক্ট করুন</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* NEW VENDOR MODAL */}
       {isNewVendorModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
@@ -3266,6 +4620,246 @@ Easy to fold, store, and carry — ideal for office, home, classroom, and travel
                   সম্পন্ন করুন ({tags.length} টি ট্যাগ)
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DROPSHIP 1-CLICK IMPORTER MODAL */}
+      {isDropshipQuickImportOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-gray-200">
+            {/* Modal Header */}
+            <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between bg-gradient-to-r from-blue-900 via-indigo-900 to-gray-900 text-white">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-blue-500/30 border border-blue-400/40 flex items-center justify-center text-amber-300">
+                  <Zap className="w-4 h-4 fill-current" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <span>ড্রপশিপ ১-ক্লিক প্রোডাক্ট ইম্পোর্টার</span>
+                    <span className="text-[10px] bg-blue-500/30 text-blue-200 border border-blue-400/40 px-2 py-0.5 rounded-full font-semibold">
+                      CJ & All Platforms
+                    </span>
+                  </h3>
+                  <p className="text-[11px] text-gray-300 mt-0.5">
+                    CJ Dropshipping, AliExpress, Alibaba, 1688 বা Taobao থেকে সব তথ্য ও ছবি এক ক্লিকে এডিটরে নিয়ে আসুন
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsDropshipQuickImportOpen(false)}
+                className="p-1.5 rounded-lg text-gray-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 overflow-y-auto space-y-4 text-xs bg-gray-50/50">
+              {/* URL / PID Input */}
+              <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-xs space-y-2.5">
+                <label className="block text-xs font-bold text-gray-800">
+                  প্রোডাক্ট লিঙ্ক বা CJ Product ID / SKU দিন:
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={dropshipUrlInput}
+                    onChange={(e) => setDropshipUrlInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleFetchDropshipForEditor();
+                      }
+                    }}
+                    placeholder="যেমন: https://cjdropshipping.com/product/item-p-162948102948.html অথবা 162948102948"
+                    className="flex-1 px-3.5 py-2 text-xs border border-gray-300 rounded-xl outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleFetchDropshipForEditor}
+                    disabled={isDropshipFetching || !dropshipUrlInput.trim()}
+                    className="px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 shadow-xs"
+                  >
+                    {isDropshipFetching ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>ফেচ হচ্ছে...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4 text-amber-300" />
+                        <span>ফেচ করুন</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Quick Sample Links */}
+                <div className="pt-2 border-t border-gray-100 flex flex-wrap items-center gap-1.5">
+                  <span className="text-gray-400 text-[11px] font-medium flex items-center gap-1">
+                    <Info className="w-3 h-3" />
+                    দ্রুত টেস্ট করার জন্য সিজে উইনার্স:
+                  </span>
+                  {CJ_WINNING_CATALOG_DATABASE.slice(0, 4).map((item) => (
+                    <button
+                      key={item.pid}
+                      type="button"
+                      onClick={() => {
+                        setDropshipUrlInput(item.pid);
+                        setTimeout(() => {
+                          const rule = getStoredPricingRule();
+                          const cjConfig = getStoredCJConfig();
+                          fetchCJProductData(item.pid, cjConfig, rule).then((res) => {
+                            setDropshipExtractedData(res.product);
+                            setDropshipSourcePriceText(`$${res.rawData.sourcePriceUSD} USD`);
+                            setDropshipActiveImgIdx(0);
+                            showToast('সিজে উইনার ফেচ সম্পন্ন!');
+                          });
+                        }, 50);
+                      }}
+                      className="px-2 py-0.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 text-[10.5px] font-medium border border-blue-200/60 cursor-pointer"
+                    >
+                      {item.productName.split(' ')[0]} {item.productName.split(' ')[1]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Extraction Result Preview */}
+              {dropshipExtractedData && (
+                <div className="bg-white rounded-2xl border-2 border-blue-500/40 p-4.5 shadow-md space-y-4 animate-in fade-in">
+                  <div className="flex items-center justify-between border-b border-gray-200 pb-2.5 flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded-md text-[10.5px] font-bold bg-emerald-100 text-emerald-800 flex items-center gap-1">
+                        <Check className="w-3 h-3" />
+                        সব তথ্য ও ছবি ফেচ সম্পন্ন
+                      </span>
+                      <span className="px-2 py-0.5 rounded-md text-[10.5px] font-bold bg-blue-100 text-blue-800">
+                        {dropshipExtractedData.dropship?.platform?.toUpperCase() || 'DROPSHIP'}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-gray-500 font-mono">
+                      মূল উৎস খরচ: <strong className="text-gray-800 font-bold">{dropshipSourcePriceText}</strong>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
+                    {/* Images Column */}
+                    <div className="sm:col-span-4 space-y-2">
+                      <div className="aspect-square rounded-xl overflow-hidden bg-gray-100 border border-gray-200 shadow-inner">
+                        <img
+                          src={dropshipExtractedData.images[dropshipActiveImgIdx] || dropshipExtractedData.images[0]}
+                          alt={dropshipExtractedData.name}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-gray-500 font-semibold block mb-1">
+                          ক্যাপচার্ড ফটো ({dropshipExtractedData.images.length}টি ছবি):
+                        </span>
+                        <div className="grid grid-cols-4 gap-1">
+                          {dropshipExtractedData.images.map((img, i) => (
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={() => setDropshipActiveImgIdx(i)}
+                              className={`aspect-square rounded-lg overflow-hidden border-2 transition-all cursor-pointer ${
+                                dropshipActiveImgIdx === i ? 'border-blue-600 ring-2 ring-blue-200' : 'border-gray-200 opacity-70'
+                              }`}
+                            >
+                              <img src={img} alt="" className="w-full h-full object-cover" />
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Information Column */}
+                    <div className="sm:col-span-8 space-y-2 text-xs">
+                      <div>
+                        <span className="text-[10.5px] text-blue-600 font-bold block">{dropshipExtractedData.category}</span>
+                        <h4 className="font-bold text-gray-900 line-clamp-2 mt-0.5">
+                          {dropshipExtractedData.name}
+                        </h4>
+                        {dropshipExtractedData.banglaName && (
+                          <p className="text-[11px] text-gray-600 mt-0.5 line-clamp-1">
+                            {dropshipExtractedData.banglaName}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Pricing Pills */}
+                      <div className="p-2.5 bg-blue-50/70 border border-blue-200 rounded-xl grid grid-cols-3 gap-2 text-center text-[11px]">
+                        <div>
+                          <span className="text-gray-500 block text-[9.5px]">বিক্রয় মূল্য</span>
+                          <strong className="text-emerald-700 font-mono font-bold text-sm">৳{dropshipExtractedData.price}</strong>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 block text-[9.5px]">ফ্যাক্টরি খরচ</span>
+                          <strong className="text-gray-700 font-mono">৳{dropshipExtractedData.costPerItem || 0}</strong>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 block text-[9.5px]">পূর্বের মূল্য</span>
+                          <strong className="text-gray-400 font-mono line-through">৳{dropshipExtractedData.originalPrice}</strong>
+                        </div>
+                      </div>
+
+                      {/* Specs and Features Badges */}
+                      <div className="p-2 bg-gray-50 rounded-xl border border-gray-100 space-y-1 text-[11px]">
+                        <div className="flex items-center justify-between text-gray-600">
+                          <span>⚙️ টেকনিক্যাল স্পেসিফিকেশন:</span>
+                          <strong className="text-gray-800">{Object.keys(dropshipExtractedData.specifications || {}).length}টি প্রোপার্টি</strong>
+                        </div>
+                        <div className="flex items-center justify-between text-gray-600">
+                          <span>✨ মূল ফিচার ও সুবিধা:</span>
+                          <strong className="text-gray-800">{dropshipExtractedData.features?.length || 0}টি পয়েন্ট</strong>
+                        </div>
+                        <div className="flex items-center justify-between text-gray-600">
+                          <span>🎨 কালার ও ভ্যারিয়েন্ট:</span>
+                          <strong className="text-gray-800">{dropshipExtractedData.colors?.length || 0}টি অপশন</strong>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Primary 1-Click Load Button */}
+                  <div className="pt-2 border-t border-gray-100 flex items-center justify-between gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setDropshipExtractedData(null)}
+                      className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-800"
+                    >
+                      ক্লিয়ার করুন
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleApplyDropshipProductToForm(dropshipExtractedData)}
+                      className="flex-1 py-2.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer active:scale-98"
+                    >
+                      <Sparkles className="w-4 h-4 text-amber-300" />
+                      <span>⚡ ১-ক্লিকে সব তথ্য ও {dropshipExtractedData.images.length}টি ছবি এডিটরে লোড করুন</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-3.5 border-t border-gray-200 bg-gray-50 flex items-center justify-between">
+              <span className="text-[11px] text-gray-500">
+                টিপস: প্রোডাক্ট ফেচ করার পর নিচের বাটনে চাপ দিলে ফর্মের সব ফিল্ড ও ইমেজ গ্যালারি অটোমেটিক পূরণ হবে।
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsDropshipQuickImportOpen(false)}
+                className="px-4 py-1.5 border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-lg text-xs font-semibold cursor-pointer"
+              >
+                বন্ধ করুন
+              </button>
             </div>
           </div>
         </div>

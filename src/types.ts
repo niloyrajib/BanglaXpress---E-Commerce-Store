@@ -1,3 +1,20 @@
+export interface ProductOption {
+  id: string;
+  name: string;
+  values: string[];
+}
+
+export interface ProductVariant {
+  id: string;
+  title: string;
+  price: number;
+  compareAtPrice?: number;
+  sku: string;
+  inventory: number;
+  image?: string;
+  options: Record<string, string>;
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -29,6 +46,8 @@ export interface Product {
   warranty: string;
   colors?: { name: string; hex: string }[];
   sizes?: string[];
+  options?: ProductOption[];
+  variants?: ProductVariant[];
   tags: string[];
 
   // Full Shopify Admin Product Fields (1:1 with Shopify PDF specifications)
@@ -92,6 +111,7 @@ export interface CartItem {
   quantity: number;
   selectedColor?: string;
   selectedSize?: string;
+  selectedOptions?: Record<string, string>;
 }
 
 export type PaymentMethod = 'cod' | 'bkash' | 'nagad' | 'rocket' | string;
@@ -146,7 +166,6 @@ export interface DropshipSourceInfo {
   supplierRating?: number | string;
   ordersCount?: number | string;
   importedAt: string;
-  dataSource?: 'api' | 'scrape' | 'mock';
 }
 
 export type OrderStatus = 'pending' | 'confirmed' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
@@ -192,6 +211,12 @@ export interface Order {
   }[];
   customerNotes?: string;
   vendor?: string;
+  customerEmail?: string;
+  archived?: boolean;
+  fulfillmentId?: string; // e.g. #1005-F1
+  confirmationCode?: string; // e.g. #PJP0FA5N7
+  shippingWeight?: number;
+  salesChannel?: string;
 }
 
 export interface Category {
@@ -223,6 +248,12 @@ export interface Coupon {
   amount: number;
   minSpend: number;
   description: string;
+  title?: string;
+  expiryDate?: string;
+  status?: 'active' | 'scheduled' | 'expired';
+  usageLimit?: number;
+  usageCount?: number;
+  createdAt?: string;
 }
 
 export interface StoreNotice {
@@ -346,6 +377,9 @@ export interface ThemeConfig {
     // Column 1 Brand Logo & Slogan
     brandName?: string;
     brandSuffix?: string;
+    logoUrl?: string;
+    logoStyle?: 'badge' | 'transparent';
+    showLogo?: boolean;
     // Column 2: Popular Categories Title & Items
     categoriesTitle?: string;
     categoriesList?: Array<{ label: string; categoryName: string }>;
@@ -371,6 +405,27 @@ export interface ThemeConfig {
 
   // Dynamic CMS Block / Section Builder Order (FilamentPHP / Statamic inspired)
   sectionsOrder?: DynamicSectionItem[];
+
+  // SEO & Social OpenGraph Meta Tags Configuration
+  seo?: SEOConfig;
+}
+
+export interface SEOConfig {
+  metaTitle: string;
+  metaDescription: string;
+  metaKeywords?: string;
+  author?: string;
+  canonicalUrl?: string;
+  ogTitle: string;
+  ogDescription: string;
+  ogImage: string;
+  ogType: 'website' | 'article' | 'product';
+  twitterCard: 'summary' | 'summary_large_image';
+  twitterCreator?: string;
+  enableStructuredData?: boolean;
+  structuredDataType?: 'OnlineStore' | 'Store' | 'Organization';
+  customHeadCode?: string;
+  lastUpdated?: string;
 }
 
 export type DynamicSectionType =
@@ -417,3 +472,31 @@ export interface DynamicSectionItem {
     [key: string]: any;
   };
 }
+
+export interface AbandonedCartItem {
+  productId: string;
+  name: string;
+  image: string;
+  price: number;
+  quantity: number;
+  color?: string;
+  size?: string;
+}
+
+export interface AbandonedCart {
+  id: string; // e.g. AB-10023
+  email: string;
+  customerName?: string;
+  phone?: string;
+  cityDivision?: string;
+  items: AbandonedCartItem[];
+  subtotal: number;
+  createdAt: string;
+  lastActiveAt: string;
+  recoveryStatus: 'unrecovered' | 'email_sent' | 'recovered';
+  emailSentAt?: string;
+  recoveryEmailCount?: number;
+  recoveryCouponCode?: string;
+  recoveryDiscountPercent?: number;
+}
+

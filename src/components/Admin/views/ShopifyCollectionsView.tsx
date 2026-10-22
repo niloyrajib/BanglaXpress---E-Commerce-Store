@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Tag,
   Search,
@@ -7,96 +7,99 @@ import {
   Plus,
   Trash2,
   X,
-  ExternalLink
+  ExternalLink,
+  Edit2,
+  Eye,
+  CheckCircle2
 } from 'lucide-react';
-import { Product } from '../../../types';
+import { Product, ThemeConfig, Category } from '../../../types';
+import { CollectionItem, INITIAL_COLLECTIONS } from '../../../data/mockData';
 import { ShopifyAddCollectionView } from './ShopifyAddCollectionView';
+
+export type { CollectionItem };
 
 interface ShopifyCollectionsViewProps {
   products: Product[];
   onOpenStorefrontCategory?: (category: string) => void;
   showToast?: (message: string) => void;
+  themeConfig?: ThemeConfig;
+  onSaveTheme?: (updatedTheme: ThemeConfig) => void;
 }
-
-export interface CollectionItem {
-  id: string;
-  title: string;
-  productsCount: number;
-  conditions: string;
-  image: string;
-  badgeLogoText?: string;
-  categoryMatch?: string;
-}
-
-// Matches the exact list in the screenshot
-const SCREENSHOT_COLLECTIONS: CollectionItem[] = [
-  {
-    id: 'col-1',
-    title: 'Gadgets & Electric Accessories',
-    productsCount: 22,
-    conditions: '',
-    image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=150&auto=format&fit=crop&q=80',
-    badgeLogoText: 'BANGLA XPRESS GADGETS'
-  },
-  {
-    id: 'col-2',
-    title: 'Computer & IT Accessories',
-    productsCount: 2,
-    conditions: '',
-    image: 'https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?w=150&auto=format&fit=crop&q=80',
-    badgeLogoText: 'BANGLA XPRESS COMPUTER'
-  },
-  {
-    id: 'col-3',
-    title: 'Electronics',
-    productsCount: 4,
-    conditions: '',
-    image: 'https://images.unsplash.com/photo-1550009158-9ebf69173e03?w=150&auto=format&fit=crop&q=80',
-    badgeLogoText: 'BANGLA XPRESS ELECTRONICS'
-  },
-  {
-    id: 'col-4',
-    title: 'Best Sellers',
-    productsCount: 3,
-    conditions: '',
-    image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=150&auto=format&fit=crop&q=80',
-    badgeLogoText: 'BEST SELLER COLLECTION'
-  },
-  {
-    id: 'col-5',
-    title: 'Health & Fitness',
-    productsCount: 3,
-    conditions: '',
-    image: 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=150&auto=format&fit=crop&q=80',
-    badgeLogoText: 'HEALTH & FITNESS'
-  },
-  {
-    id: 'col-6',
-    title: 'Home Appliances',
-    productsCount: 2,
-    conditions: '',
-    image: 'https://images.unsplash.com/photo-1584269600464-37b1b58a9fe7?w=150&auto=format&fit=crop&q=80',
-    badgeLogoText: 'HOME APPLIANCES'
-  },
-  {
-    id: 'col-7',
-    title: 'Caps',
-    productsCount: 4,
-    conditions: '',
-    image: 'https://images.unsplash.com/photo-1588850561407-ed78c282e89b?w=150&auto=format&fit=crop&q=80',
-    badgeLogoText: 'CAPS & APPAREL'
-  }
-];
 
 export const ShopifyCollectionsView: React.FC<ShopifyCollectionsViewProps> = ({
   products,
   onOpenStorefrontCategory,
-  showToast = (_msg: string) => {}
+  showToast = (_msg: string) => {},
+  themeConfig,
+  onSaveTheme
 }) => {
-  const [collections, setCollections] = useState<CollectionItem[]>(SCREENSHOT_COLLECTIONS);
+  // Load persistent collections from localStorage or fallback to INITIAL_COLLECTIONS
+  const [collections, setCollections] = useState<CollectionItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('bx_collections');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.error('Failed to parse bx_collections:', e);
+    }
+    return INITIAL_COLLECTIONS;
+  });
+
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [currentView, setCurrentView] = useState<'list' | 'add'>('list');
+  const [currentView, setCurrentView] = useState<'list' | 'add' | 'edit'>('list');
+  const [editingCollection, setEditingCollection] = useState<CollectionItem | null>(null);
+
+  // Sync collections to theme on first mount if theme doesn't yet contain them
+  useEffect(() => {
+    if (!themeConfig || !onSaveTheme) return;
+
+    const currentItems = themeConfig.categoriesSection?.items || [];
+    let hasChanges = false;
+    const updatedItems = [...currentItems];
+
+    collections.forEach((col) => {
+      const exists = updatedItems.some(
+        (it) =>
+          it.id === col.id ||
+          it.id === `cat-${col.id}` ||
+          it.name.toLowerCase() === col.title.toLowerCase()
+      );
+      if (!exists) {
+        hasChanges = true;
+        const slug = col.title
+          .toLowerCase()
+          .replace(/[^\w\s-]/g, '')
+          .replace(/[\s_-]+/g, '-')
+          .replace(/^-+|-+$/g, '');
+
+        updatedItems.push({
+          id: col.id.startsWith('cat-') ? col.id : `cat-${col.id}`,
+          name: col.title,
+          banglaName: col.title,
+          slug,
+          iconName: 'Sparkles',
+          image: col.image,
+          itemCount: col.productsCount || 0
+        });
+      }
+    });
+
+    if (hasChanges) {
+      onSaveTheme({
+        ...themeConfig,
+        categoriesSection: {
+          ...themeConfig.categoriesSection,
+          enabled: true,
+          items: updatedItems
+        }
+      });
+    }
+  }, [collections, themeConfig, onSaveTheme]);
 
   // Selection toggle
   const toggleSelectAll = () => {
@@ -119,22 +122,176 @@ export const ShopifyCollectionsView: React.FC<ShopifyCollectionsViewProps> = ({
     );
   }, [collections, searchQuery]);
 
+  // Handle Save (both Add and Edit) with immediate Home Page reflection
+  const handleSaveCollection = (savedCol: CollectionItem, isEdit: boolean) => {
+    let nextCollections: CollectionItem[];
+    if (isEdit) {
+      nextCollections = collections.map((c) => (c.id === savedCol.id ? savedCol : c));
+    } else {
+      nextCollections = [savedCol, ...collections];
+    }
+    setCollections(nextCollections);
+
+    // Save to localStorage
+    try {
+      localStorage.setItem('bx_collections', JSON.stringify(nextCollections));
+    } catch (e) {
+      console.error(e);
+    }
+
+    // Immediately reflect in themeConfig.categoriesSection.items for the Home Page
+    if (themeConfig && onSaveTheme) {
+      const currentItems = themeConfig.categoriesSection?.items || [];
+      const oldTitle = editingCollection?.title.toLowerCase();
+
+      let updatedItems: Category[];
+      if (isEdit) {
+        let matched = false;
+        updatedItems = currentItems.map((item) => {
+          if (
+            item.id === savedCol.id ||
+            item.id === `cat-${savedCol.id}` ||
+            (oldTitle && item.name.toLowerCase() === oldTitle) ||
+            item.name.toLowerCase() === savedCol.title.toLowerCase()
+          ) {
+            matched = true;
+            return {
+              ...item,
+              name: savedCol.title,
+              banglaName: savedCol.title,
+              image: savedCol.image,
+              itemCount: savedCol.productsCount || item.itemCount
+            };
+          }
+          return item;
+        });
+
+        if (!matched) {
+          const slug = savedCol.title
+            .toLowerCase()
+            .replace(/[^\w\s-]/g, '')
+            .replace(/[\s_-]+/g, '-')
+            .replace(/^-+|-+$/g, '');
+
+          updatedItems.push({
+            id: savedCol.id.startsWith('cat-') ? savedCol.id : `cat-${savedCol.id}`,
+            name: savedCol.title,
+            banglaName: savedCol.title,
+            slug,
+            iconName: 'Sparkles',
+            image: savedCol.image,
+            itemCount: savedCol.productsCount || 0
+          });
+        }
+      } else {
+        // Add new category item at top of Home Page categories
+        const slug = savedCol.title
+          .toLowerCase()
+          .replace(/[^\w\s-]/g, '')
+          .replace(/[\s_-]+/g, '-')
+          .replace(/^-+|-+$/g, '');
+
+        const newCat: Category = {
+          id: savedCol.id.startsWith('cat-') ? savedCol.id : `cat-${savedCol.id}`,
+          name: savedCol.title,
+          banglaName: savedCol.title,
+          slug,
+          iconName: 'Sparkles',
+          image: savedCol.image,
+          itemCount: savedCol.productsCount || 0
+        };
+
+        updatedItems = [
+          newCat,
+          ...currentItems.filter((c) => c.name.toLowerCase() !== savedCol.title.toLowerCase())
+        ];
+      }
+
+      onSaveTheme({
+        ...themeConfig,
+        categoriesSection: {
+          ...themeConfig.categoriesSection,
+          enabled: true,
+          items: updatedItems
+        }
+      });
+    }
+
+    showToast(
+      isEdit
+        ? `"${savedCol.title}" কালেকশন সফলভাবে আপডেট হয়েছে এবং হোম পেজে রিফ্লেক্ট হয়েছে!`
+        : `"${savedCol.title}" কালেকশন সফলভাবে তৈরি হয়েছে এবং সাথে সাথে হোম পেজে যুক্ত হয়েছে!`
+    );
+  };
+
+  // Handle single deletion from inside edit view
+  const handleDeleteSingle = (colId: string) => {
+    handleDeleteCollections([colId]);
+  };
+
+  // Handle bulk or single deletion
+  const handleDeleteCollections = (idsToDelete: string[]) => {
+    const nextCollections = collections.filter((c) => !idsToDelete.includes(c.id));
+    setCollections(nextCollections);
+    setSelectedIds([]);
+
+    try {
+      localStorage.setItem('bx_collections', JSON.stringify(nextCollections));
+    } catch (e) {
+      console.error(e);
+    }
+
+    // Reflect deletion on Home Page
+    if (themeConfig && onSaveTheme) {
+      const deletedTitles = collections
+        .filter((c) => idsToDelete.includes(c.id))
+        .map((c) => c.title.toLowerCase());
+
+      const currentItems = themeConfig.categoriesSection?.items || [];
+      const updatedItems = currentItems.filter(
+        (item) =>
+          !idsToDelete.includes(item.id) &&
+          !idsToDelete.includes(item.id.replace('cat-', '')) &&
+          !deletedTitles.includes(item.name.toLowerCase())
+      );
+
+      onSaveTheme({
+        ...themeConfig,
+        categoriesSection: {
+          ...themeConfig.categoriesSection,
+          items: updatedItems
+        }
+      });
+    }
+
+    showToast(`${idsToDelete.length} টি কালেকশন মুছে ফেলা হয়েছে`);
+  };
+
   const handleDeleteSelected = () => {
     if (confirm(`Delete ${selectedIds.length} collection(s)?`)) {
-      setCollections((prev) => prev.filter((c) => !selectedIds.includes(c.id)));
-      setSelectedIds([]);
-      showToast(`${selectedIds.length} টি কালেকশন মুছে ফেলা হয়েছে`);
+      handleDeleteCollections(selectedIds);
     }
   };
 
-  // If in 'add' mode, render the full Add Collection page matching the PDF screenshot
-  if (currentView === 'add') {
+  // If in 'add' or 'edit' mode, render the full Collection Form page
+  if (currentView === 'add' || (currentView === 'edit' && editingCollection)) {
     return (
       <ShopifyAddCollectionView
         products={products}
-        onBack={() => setCurrentView('list')}
-        onSave={(newCol) => {
-          setCollections((prev) => [newCol, ...prev]);
+        initialCollection={currentView === 'edit' ? editingCollection : null}
+        isEditing={currentView === 'edit'}
+        onBack={() => {
+          setEditingCollection(null);
+          setCurrentView('list');
+        }}
+        onSave={(savedCol) => {
+          handleSaveCollection(savedCol, currentView === 'edit');
+          setEditingCollection(null);
+          setCurrentView('list');
+        }}
+        onDelete={(colId) => {
+          handleDeleteSingle(colId);
+          setEditingCollection(null);
           setCurrentView('list');
         }}
         showToast={showToast}
@@ -149,15 +306,24 @@ export const ShopifyCollectionsView: React.FC<ShopifyCollectionsViewProps> = ({
         <div className="flex items-center gap-2">
           <Tag className="w-5 h-5 text-gray-700 stroke-[2.2]" />
           <h1 className="text-xl font-bold text-[#202223] tracking-tight">Collections</h1>
+          <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-mono font-medium">
+            {collections.length}
+          </span>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setCurrentView('add')}
-          className="px-3.5 py-1.5 bg-[#303030] hover:bg-[#202020] text-white text-xs font-semibold rounded-lg shadow-xs transition-colors"
-        >
-          Add collection
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setEditingCollection(null);
+              setCurrentView('add');
+            }}
+            className="px-3.5 py-1.5 bg-[#303030] hover:bg-[#202020] text-white text-xs font-semibold rounded-lg shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Add collection</span>
+          </button>
+        </div>
       </div>
 
       {/* Main Table Card matching screenshot */}
@@ -195,7 +361,7 @@ export const ShopifyCollectionsView: React.FC<ShopifyCollectionsViewProps> = ({
               <button
                 type="button"
                 onClick={handleDeleteSelected}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium text-rose-600 hover:bg-rose-50 border border-rose-200"
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium text-rose-600 hover:bg-rose-50 border border-rose-200 cursor-pointer"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span>Delete ({selectedIds.length})</span>
@@ -212,7 +378,7 @@ export const ShopifyCollectionsView: React.FC<ShopifyCollectionsViewProps> = ({
           </div>
         </div>
 
-        {/* Table matching screenshot */}
+        {/* Table matching screenshot with clickable & editable rows */}
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
@@ -231,6 +397,7 @@ export const ShopifyCollectionsView: React.FC<ShopifyCollectionsViewProps> = ({
                 <th className="py-2.5 px-3 text-[#5c5f62] font-normal text-xs">Title</th>
                 <th className="py-2.5 px-6 text-right font-normal text-[#5c5f62] text-xs w-28">Products</th>
                 <th className="py-2.5 px-6 text-left font-normal text-[#5c5f62] text-xs w-44">Conditions</th>
+                <th className="py-2.5 px-4 text-center font-normal text-[#5c5f62] text-xs w-24">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#e1e3e5] bg-white">
@@ -240,10 +407,14 @@ export const ShopifyCollectionsView: React.FC<ShopifyCollectionsViewProps> = ({
                 return (
                   <tr
                     key={col.id}
-                    className={`hover:bg-[#f6f6f7] transition-colors cursor-pointer ${
+                    className={`hover:bg-[#f6f6f7] transition-colors cursor-pointer group ${
                       isSelected ? 'bg-[#f1f2f4]' : ''
                     }`}
-                    onClick={() => toggleSelectOne(col.id)}
+                    onClick={() => {
+                      setEditingCollection(col);
+                      setCurrentView('edit');
+                    }}
+                    title="ক্লিক করে এই কালেকশনটি এডিট করুন"
                   >
                     {/* Checkbox */}
                     <td
@@ -262,7 +433,7 @@ export const ShopifyCollectionsView: React.FC<ShopifyCollectionsViewProps> = ({
                     <td className="py-3 px-3">
                       <div className="flex items-center gap-3">
                         {/* Circular Brand Stamp / Thumbnail matching image */}
-                        <div className="w-10 h-10 rounded-full border border-gray-300 overflow-hidden bg-white shadow-2xs shrink-0 flex items-center justify-center p-0.5 relative group">
+                        <div className="w-10 h-10 rounded-full border border-gray-300 overflow-hidden bg-white shadow-2xs shrink-0 flex items-center justify-center p-0.5 relative group-hover:scale-105 transition-transform">
                           <img
                             src={col.image}
                             alt={col.title}
@@ -271,9 +442,21 @@ export const ShopifyCollectionsView: React.FC<ShopifyCollectionsViewProps> = ({
                           <div className="absolute inset-0 rounded-full border-2 border-emerald-600/40 pointer-events-none" />
                         </div>
 
-                        <span className="font-semibold text-xs text-[#202223] hover:underline">
-                          {col.title}
-                        </span>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-xs text-[#202223] group-hover:text-blue-700 hover:underline">
+                              {col.title}
+                            </span>
+                            <span className="opacity-0 group-hover:opacity-100 text-[10px] text-blue-600 font-medium transition-opacity">
+                              এডিট করতে ক্লিক করুন
+                            </span>
+                          </div>
+                          {col.badgeLogoText && (
+                            <p className="text-[10px] text-gray-400 font-mono tracking-tight uppercase">
+                              {col.badgeLogoText}
+                            </p>
+                          )}
+                        </div>
                       </div>
                     </td>
 
@@ -284,7 +467,39 @@ export const ShopifyCollectionsView: React.FC<ShopifyCollectionsViewProps> = ({
 
                     {/* Conditions */}
                     <td className="py-3 px-6 text-left text-gray-500 text-xs font-mono">
-                      {col.conditions || ''}
+                      {col.conditions || 'Manual'}
+                    </td>
+
+                    {/* Actions column */}
+                    <td
+                      className="py-3 px-4 text-center"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="flex items-center justify-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingCollection(col);
+                            setCurrentView('edit');
+                          }}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-gray-300 bg-white hover:bg-gray-100 text-[#202223] text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
+                          title="Edit collection"
+                        >
+                          <Edit2 className="w-3 h-3 text-blue-600" />
+                          <span>Edit</span>
+                        </button>
+
+                        {onOpenStorefrontCategory && (
+                          <button
+                            type="button"
+                            onClick={() => onOpenStorefrontCategory(col.title)}
+                            className="p-1 rounded-md border border-gray-200 bg-gray-50 hover:bg-gray-100 text-gray-600 transition-colors cursor-pointer"
+                            title="হোম পেজে দেখুন"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5 text-gray-500 hover:text-gray-800" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -292,7 +507,7 @@ export const ShopifyCollectionsView: React.FC<ShopifyCollectionsViewProps> = ({
 
               {filteredCollections.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="py-8 text-center text-gray-500 text-xs">
+                  <td colSpan={5} className="py-8 text-center text-gray-500 text-xs">
                     No collections found matching "{searchQuery}".
                   </td>
                 </tr>

@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
-import { Phone, MessageCircle, X, ChevronUp, ShoppingBag, DownloadCloud } from 'lucide-react';
+import { Phone, MessageCircle, X, ChevronUp, ShoppingBag } from 'lucide-react';
 import { STORE_SETTINGS } from '../data/mockData';
 
 interface FloatingHotlineProps {
   cartCount: number;
   onOpenCart: () => void;
-  onOpenDropshipImport: () => void;
+  lang?: 'en' | 'bn';
 }
 
-export const FloatingHotline: React.FC<FloatingHotlineProps> = ({ cartCount, onOpenCart, onOpenDropshipImport }) => {
+export const FloatingHotline: React.FC<FloatingHotlineProps> = ({ cartCount, onOpenCart, lang = 'bn' }) => {
   const [showScrollTop, setShowScrollTop] = useState(false);
 
   React.useEffect(() => {
@@ -29,26 +29,17 @@ export const FloatingHotline: React.FC<FloatingHotlineProps> = ({ cartCount, onO
 
   return (
     <div className="fixed bottom-5 right-5 z-40 flex flex-col items-end gap-2.5">
-
-      {/* 1-Click Dropship Product Import */}
-      <button
-        id="floating-dropship-import-btn"
-        onClick={onOpenDropshipImport}
-        className="flex items-center gap-2 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-700 hover:to-fuchsia-700 text-white px-4 py-2.5 rounded-full shadow-2xl transition-transform hover:scale-105 group cursor-pointer border-2 border-violet-300/50"
-        title="AliExpress, 1688, Alibaba, CJ Dropshipping, Taobao থেকে 1-Click ড্রপশিপ ইমপোর্ট করুন"
-      >
-        <DownloadCloud className="w-5 h-5" />
-        <span className="text-xs font-bold hidden sm:inline">1-Click Import</span>
-      </button>
       
       {/* Mobile Floating Cart Button */}
       {cartCount > 0 && (
         <button
           onClick={onOpenCart}
-          className="sm:hidden flex items-center gap-2 bg-slate-900 text-white px-4 py-2.5 rounded-full shadow-2xl border-2 border-rose-500 animate-bounce"
+          className="sm:hidden flex items-center gap-2 bg-slate-900 text-white px-4 py-2.5 rounded-full shadow-2xl border-2 border-rose-500 animate-bounce cursor-pointer"
         >
           <ShoppingBag className="w-4 h-4 text-rose-400" />
-          <span className="text-xs font-bold font-mono">{cartCount} টি পণ্য</span>
+          <span className="text-xs font-bold font-mono">
+            {lang === 'en' ? `${cartCount} items` : `${cartCount} টি পণ্য`}
+          </span>
         </button>
       )}
 
@@ -56,8 +47,8 @@ export const FloatingHotline: React.FC<FloatingHotlineProps> = ({ cartCount, onO
       {showScrollTop && (
         <button
           onClick={scrollToTop}
-          className="w-10 h-10 rounded-full bg-white text-gray-700 hover:text-rose-600 shadow-lg border border-gray-200 flex items-center justify-center transition-all"
-          title="Scroll to Top"
+          className="w-10 h-10 rounded-full bg-white text-gray-700 hover:text-rose-600 shadow-lg border border-gray-200 flex items-center justify-center transition-all cursor-pointer"
+          title={lang === 'en' ? 'Scroll to Top' : 'উপরে যান'}
         >
           <ChevronUp className="w-5 h-5" />
         </button>
@@ -67,7 +58,9 @@ export const FloatingHotline: React.FC<FloatingHotlineProps> = ({ cartCount, onO
       <a
         id="floating-whatsapp-btn"
         href={`https://wa.me/${STORE_SETTINGS.whatsapp.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
-          'আসসালামু আলাইকুম, আমি BanglaXpress স্টোর থেকে পণ্য অর্ডার করতে চাই।'
+          lang === 'en'
+            ? 'Hello, I want to order products from BanglaXpress store.'
+            : 'আসসালামু আলাইকুম, আমি BanglaXpress স্টোর থেকে পণ্য অর্ডার করতে চাই।'
         )}`}
         target="_blank"
         rel="noreferrer"
@@ -75,7 +68,9 @@ export const FloatingHotline: React.FC<FloatingHotlineProps> = ({ cartCount, onO
         title="Chat on WhatsApp"
       >
         <MessageCircle className="w-5 h-5 fill-white" />
-        <span className="text-xs font-bold hidden sm:inline">WhatsApp অর্ডার</span>
+        <span className="text-xs font-bold hidden sm:inline">
+          {lang === 'en' ? 'WhatsApp Order' : 'WhatsApp অর্ডার'}
+        </span>
       </a>
 
       {/* Direct Phone Call Floating Button */}

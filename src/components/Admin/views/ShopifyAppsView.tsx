@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Layers,
   CheckCircle2,
@@ -14,24 +14,21 @@ import {
   RefreshCw,
   Search,
   Trash2,
-  Store
+  Store,
+  ToggleLeft,
+  ToggleRight,
+  Eye,
+  EyeOff
 } from 'lucide-react';
+import {
+  AppIntegrationSetting,
+  getStoredIntegrationApps,
+  saveIntegrationApps,
+  APPS_SETTINGS_UPDATED_EVENT
+} from '../../../utils/appIntegrations';
 
 interface ShopifyAppsViewProps {
   showToast?: (message: string) => void;
-}
-
-interface InstalledApp {
-  id: string;
-  name: string;
-  category: string;
-  description: string;
-  status: 'Connected' | 'Configuring' | 'Disabled';
-  iconBg: string;
-  iconText: string;
-  apiKey: string;
-  endpoint: string;
-  live: boolean;
 }
 
 interface AvailableApp {
@@ -44,69 +41,6 @@ interface AvailableApp {
   iconBg: string;
   iconText: string;
 }
-
-const DEFAULT_INSTALLED_APPS: InstalledApp[] = [
-  {
-    id: 'app-bkash',
-    name: 'bKash Merchant Checkout API',
-    category: 'Payments',
-    description: 'Accept seamless bKash payments directly in Bangladeshi Taka with instant tokenized validation.',
-    status: 'Connected',
-    iconBg: 'bg-[#D12053]',
-    iconText: 'bK',
-    apiKey: 'bK_live_app_key_88391047291',
-    endpoint: 'https://tokenized.pay.bka.sh/v1.2.0-beta/tokenized/checkout',
-    live: true
-  },
-  {
-    id: 'app-nagad',
-    name: 'Nagad Gateway Integration',
-    category: 'Payments',
-    description: 'Official Nagad direct payment gateway with instant transaction verification.',
-    status: 'Connected',
-    iconBg: 'bg-[#F7931E]',
-    iconText: 'Ng',
-    apiKey: 'nagad_live_key_992019482',
-    endpoint: 'https://api.mynagad.com/api/dfs/check-out/initialize',
-    live: true
-  },
-  {
-    id: 'app-pathao',
-    name: 'Pathao Courier Automated Logistics',
-    category: 'Shipping & Fulfillment',
-    description: 'Auto-generates parcel tracking numbers, schedules pickup requests, and updates delivery statuses.',
-    status: 'Connected',
-    iconBg: 'bg-[#E41E26]',
-    iconText: 'Pt',
-    apiKey: 'pt_client_8492019482',
-    endpoint: 'https://courier-api.pathao.com/aladdin/api/v1/orders',
-    live: true
-  },
-  {
-    id: 'app-steadfast',
-    name: 'Steadfast Courier API',
-    category: 'Shipping & Fulfillment',
-    description: 'Integrated with Steadfast for nationwide fast Cash on Delivery order dispatches.',
-    status: 'Connected',
-    iconBg: 'bg-emerald-600',
-    iconText: 'St',
-    apiKey: 'sf_live_key_99381029482710',
-    endpoint: 'https://portal.steadfast.com.bd/api/v1/create_order',
-    live: true
-  },
-  {
-    id: 'app-sms',
-    name: 'Greenweb & Alpha SMS Gateway',
-    category: 'Marketing & SMS',
-    description: 'Sends real-time order confirmation SMS, dispatch alerts, and OTP verifications to customers.',
-    status: 'Connected',
-    iconBg: 'bg-blue-600',
-    iconText: 'SMS',
-    apiKey: 'gw_token_9918237194829104',
-    endpoint: 'https://api.greenweb.com.bd/api.php',
-    live: true
-  }
-];
 
 const AVAILABLE_STORE_APPS: AvailableApp[] = [
   {
@@ -154,8 +88,8 @@ const AVAILABLE_STORE_APPS: AvailableApp[] = [
 export const ShopifyAppsView: React.FC<ShopifyAppsViewProps> = ({
   showToast = (_msg: string) => {}
 }) => {
-  const [apps, setApps] = useState<InstalledApp[]>(DEFAULT_INSTALLED_APPS);
-  const [selectedApp, setSelectedApp] = useState<InstalledApp | null>(null);
+  const [apps, setApps] = useState<AppIntegrationSetting[]>(() => getStoredIntegrationApps());
+  const [selectedApp, setSelectedApp] = useState<AppIntegrationSetting | null>(null);
   const [isStoreModalOpen, setIsStoreModalOpen] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
@@ -164,12 +98,48 @@ export const ShopifyAppsView: React.FC<ShopifyAppsViewProps> = ({
   const [configApiKey, setConfigApiKey] = useState('');
   const [configEndpoint, setConfigEndpoint] = useState('');
   const [configLive, setConfigLive] = useState(true);
+  const [configEnabled, setConfigEnabled] = useState(true);
 
-  const handleOpenConfig = (app: InstalledApp) => {
+  // Sync when apps change in another window/tab
+  useEffect(() => {
+    const handleUpdate = () => {
+      setApps(getStoredIntegrationApps());
+    };
+    window.addEventListener(APPS_SETTINGS_UPDATED_EVENT, handleUpdate);
+    return () => window.removeEventListener(APPS_SETTINGS_UPDATED_EVENT, handleUpdate);
+  }, []);
+
+  const handleToggleApp = (appId: string) => {
+    const updated = apps.map((a) => {
+      if (a.id === appId) {
+        const nextEnabled = !a.enabled;
+        return {
+          ...a,
+          enabled: nextEnabled,
+          status: (nextEnabled ? 'Connected' : 'Disabled') as 'Connected' | 'Configuring' | 'Disabled'
+        };
+      }
+      return a;
+    });
+    setApps(updated);
+    saveIntegrationApps(updated);
+
+    const toggled = updated.find((a) => a.id === appId);
+    if (toggled) {
+      showToast(
+        toggled.enabled
+          ? `✅ '${toggled.name}' এনাবল করা হয়েছে (Fast Checkout-এ সচল)`
+          : `⚠️ '${toggled.name}' ডিজেবল করা হয়েছে (Fast Checkout থেকে লুকানো হয়েছে)`
+      );
+    }
+  };
+
+  const handleOpenConfig = (app: AppIntegrationSetting) => {
     setSelectedApp(app);
     setConfigApiKey(app.apiKey);
     setConfigEndpoint(app.endpoint);
     setConfigLive(app.live);
+    setConfigEnabled(app.enabled ?? true);
     setTestResult(null);
   };
 
@@ -177,21 +147,23 @@ export const ShopifyAppsView: React.FC<ShopifyAppsViewProps> = ({
     e.preventDefault();
     if (!selectedApp) return;
 
-    setApps((prev) =>
-      prev.map((a) =>
-        a.id === selectedApp.id
-          ? {
-              ...a,
-              apiKey: configApiKey,
-              endpoint: configEndpoint,
-              live: configLive,
-              status: 'Connected'
-            }
-          : a
-      )
+    const updated = apps.map((a) =>
+      a.id === selectedApp.id
+        ? {
+            ...a,
+            apiKey: configApiKey,
+            endpoint: configEndpoint,
+            live: configLive,
+            enabled: configEnabled,
+            status: (configEnabled ? 'Connected' : 'Disabled') as 'Connected' | 'Configuring' | 'Disabled'
+          }
+        : a
     );
 
-    showToast(`${selectedApp.name} API কনফিগারেশন সফলভাবে আপডেট করা হয়েছে!`);
+    setApps(updated);
+    saveIntegrationApps(updated);
+
+    showToast(`${selectedApp.name} কনফিগারেশন ও স্ট্যাটাস সফলভাবে সেভ করা হয়েছে!`);
     setSelectedApp(null);
   };
 
@@ -205,7 +177,7 @@ export const ShopifyAppsView: React.FC<ShopifyAppsViewProps> = ({
   };
 
   const handleInstallApp = (app: AvailableApp) => {
-    const newInstalled: InstalledApp = {
+    const newInstalled: AppIntegrationSetting = {
       id: app.id,
       name: app.name,
       category: app.category,
@@ -215,16 +187,21 @@ export const ShopifyAppsView: React.FC<ShopifyAppsViewProps> = ({
       iconText: app.iconText,
       apiKey: `key_${Date.now()}`,
       endpoint: `https://api.partner.com/v1`,
-      live: true
+      live: true,
+      enabled: true
     };
-    setApps((prev) => [newInstalled, ...prev]);
-    showToast(`${app.name} সফলভাবে ইনস্টল করা হয়েছে!`);
+    const updated = [newInstalled, ...apps];
+    setApps(updated);
+    saveIntegrationApps(updated);
+    showToast(`${app.name} সফলভাবে ইনস্টল ও Fast Checkout-এ যুক্ত করা হয়েছে!`);
     setIsStoreModalOpen(false);
   };
 
   const handleUninstallApp = (appId: string, appName: string) => {
     if (confirm(`Uninstall ${appName}?`)) {
-      setApps((prev) => prev.filter((a) => a.id !== appId));
+      const updated = apps.filter((a) => a.id !== appId);
+      setApps(updated);
+      saveIntegrationApps(updated);
       showToast(`${appName} আনইনস্টল সম্পন্ন হয়েছে`);
       if (selectedApp?.id === appId) setSelectedApp(null);
     }
@@ -281,11 +258,43 @@ export const ShopifyAppsView: React.FC<ShopifyAppsViewProps> = ({
               </div>
             </div>
 
-            <div className="flex items-center justify-between border-t border-gray-100 pt-3 text-xs">
-              <span className="text-[11px] text-gray-400 font-mono">
-                {app.live ? '● Live Mode' : '○ Sandbox'}
-              </span>
+            <div className="flex items-center justify-between border-t border-gray-100 pt-3 text-xs gap-2 flex-wrap">
               <div className="flex items-center gap-2">
+                <span className="text-[11px] text-gray-400 font-mono">
+                  {app.live ? '● Live Mode' : '○ Sandbox'}
+                </span>
+                <span className="text-gray-300">|</span>
+                <span className={`text-[10.5px] font-semibold flex items-center gap-1 ${app.enabled ? 'text-emerald-700' : 'text-gray-400'}`}>
+                  {app.enabled ? <Eye className="w-3 h-3 text-emerald-600" /> : <EyeOff className="w-3 h-3 text-gray-400" />}
+                  {app.enabled ? 'Fast Checkout: Active' : 'Fast Checkout: Hidden'}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {/* 1-Click Enable / Disable Switch */}
+                <button
+                  type="button"
+                  onClick={() => handleToggleApp(app.id)}
+                  title={app.enabled ? 'Click to Disable from Fast Express Checkout' : 'Click to Enable in Fast Express Checkout'}
+                  className={`px-2.5 py-1 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-xs ${
+                    app.enabled
+                      ? 'bg-emerald-500 hover:bg-emerald-600 text-white'
+                      : 'bg-gray-100 hover:bg-gray-200 text-gray-600 border border-gray-300'
+                  }`}
+                >
+                  {app.enabled ? (
+                    <>
+                      <ToggleRight className="w-4 h-4 text-white" />
+                      <span>Enabled</span>
+                    </>
+                  ) : (
+                    <>
+                      <ToggleLeft className="w-4 h-4 text-gray-500" />
+                      <span>Disabled</span>
+                    </>
+                  )}
+                </button>
+
                 <button
                   type="button"
                   onClick={() => handleOpenConfig(app)}
@@ -346,6 +355,27 @@ export const ShopifyAppsView: React.FC<ShopifyAppsViewProps> = ({
                 onChange={(e) => setConfigEndpoint(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg font-mono text-xs outline-hidden focus:border-gray-900"
               />
+            </div>
+
+            <div className="flex items-center justify-between p-3 bg-emerald-50/70 rounded-lg border border-emerald-200">
+              <div>
+                <span className="font-bold text-gray-900 block flex items-center gap-1.5">
+                  <Zap className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Fast Express Checkout Visibility</span>
+                </span>
+                <span className="text-[11px] text-gray-600">
+                  Enable or disable this integration in customer Fast Express Checkout modal
+                </span>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={configEnabled}
+                  onChange={(e) => setConfigEnabled(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-10 h-5 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-600"></div>
+              </label>
             </div>
 
             <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">

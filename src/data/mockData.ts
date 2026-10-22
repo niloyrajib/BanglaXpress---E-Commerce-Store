@@ -100,6 +100,75 @@ export const CATEGORIES: Category[] = [
   },
 ];
 
+export interface CollectionItem {
+  id: string;
+  title: string;
+  productsCount: number;
+  conditions: string;
+  image: string;
+  badgeLogoText?: string;
+  categoryMatch?: string;
+}
+
+export const INITIAL_COLLECTIONS: CollectionItem[] = [
+  {
+    id: 'col-1',
+    title: 'Gadgets & Electric Accessories',
+    productsCount: 22,
+    conditions: 'Product category is equal to Gadgets',
+    image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600&auto=format&fit=crop&q=80',
+    badgeLogoText: 'BANGLA XPRESS GADGETS'
+  },
+  {
+    id: 'col-2',
+    title: 'Computer & IT Accessories',
+    productsCount: 2,
+    conditions: 'Product category is equal to Computer',
+    image: 'https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?w=600&auto=format&fit=crop&q=80',
+    badgeLogoText: 'BANGLA XPRESS COMPUTER'
+  },
+  {
+    id: 'col-3',
+    title: 'Electronics',
+    productsCount: 4,
+    conditions: 'Product category is equal to Electronics',
+    image: 'https://images.unsplash.com/photo-1550009158-9ebf69173e03?w=600&auto=format&fit=crop&q=80',
+    badgeLogoText: 'BANGLA XPRESS ELECTRONICS'
+  },
+  {
+    id: 'col-4',
+    title: 'Best Sellers',
+    productsCount: 3,
+    conditions: 'Total sold count > 100',
+    image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&auto=format&fit=crop&q=80',
+    badgeLogoText: 'BEST SELLER COLLECTION'
+  },
+  {
+    id: 'col-5',
+    title: 'Health & Fitness',
+    productsCount: 3,
+    conditions: 'Product category is equal to Health',
+    image: 'https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=600&auto=format&fit=crop&q=80',
+    badgeLogoText: 'HEALTH & FITNESS'
+  },
+  {
+    id: 'col-6',
+    title: 'Home Appliances',
+    productsCount: 2,
+    conditions: 'Product category is equal to Home',
+    image: 'https://images.unsplash.com/photo-1584269600464-37b1b58a9fe7?w=600&auto=format&fit=crop&q=80',
+    badgeLogoText: 'HOME APPLIANCES'
+  },
+  {
+    id: 'col-7',
+    title: 'Caps',
+    productsCount: 4,
+    conditions: 'Product category is equal to Caps',
+    image: 'https://images.unsplash.com/photo-1588850561407-ed78c282e89b?w=600&auto=format&fit=crop&q=80',
+    badgeLogoText: 'CAPS & APPAREL'
+  }
+];
+
 export const PRODUCTS: Product[] = [
   {
     id: 'prod-shopify-stand-881',
@@ -251,7 +320,7 @@ Easy to fold, store, and carry — ideal for office, home, classroom, and travel
     },
     warranty: '6 Months Replacement Warranty',
     colors: [
-      { name: 'Orange Strap + Titanium Case', hex: '#ea580c' },
+      { name: 'Bright Vermilion Strap + Titanium Case', hex: '#F54927' },
       { name: 'Midnight Black + Matte Black Case', hex: '#18181b' },
       { name: 'Silver White + Silver Case', hex: '#e2e8f0' }
     ],
@@ -796,6 +865,246 @@ Easy to fold, store, and carry — ideal for office, home, classroom, and travel
 
 export const INITIAL_ORDERS: Order[] = [
   {
+    id: 'BX-1005',
+    createdAt: '2026-09-25 13:08',
+    customerName: 'Tanvir Ahmed',
+    phone: '01712-345678',
+    altPhone: '01898765432',
+    customerEmail: 'tanvir.ahmed@gmail.com',
+    address: 'House 12, Road 5, Block C, Banasree, Dhaka',
+    cityDivision: 'Inside Dhaka',
+    district: 'Dhaka',
+    thanaZone: 'Banasree',
+    deliveryCharge: 70,
+    items: [
+      {
+        productId: 'prod-1',
+        name: 'T900 Ultra 2 Bluetooth Calling Smartwatch with 2.09" HD Display',
+        image: 'https://images.unsplash.com/photo-1579586337278-3befd40fd17a?w=800&auto=format&fit=crop&q=80',
+        price: 1590,
+        quantity: 2,
+        color: 'Midnight Black'
+      }
+    ],
+    subtotal: 3180,
+    discount: 0,
+    total: 3250,
+    paymentMethod: 'cod',
+    paymentStatus: 'unpaid',
+    status: 'pending',
+    courierName: 'Steadfast Courier',
+    trackingNumber: 'ST-1005-DH89',
+    customerNotes: 'Please call before delivery.',
+    confirmationCode: 'ST-1005-DH89',
+    fulfillmentId: '#BX-1005-F1',
+    salesChannel: 'Online Store',
+    timeline: [
+      {
+        status: 'pending',
+        title: 'Order Placed',
+        description: 'Order placed by Tanvir Ahmed via Online Store Cash on Delivery.',
+        timestamp: '25 Sep, 01:08 PM',
+        completed: true
+      },
+      {
+        status: 'pending',
+        title: 'Payment Pending',
+        description: 'A ৳3,250.00 BDT payment is pending on Cash on Delivery (COD).',
+        timestamp: '25 Sep, 01:08 PM',
+        completed: true
+      }
+    ]
+  },
+  {
+    id: 'BX-14585',
+    createdAt: '2026-09-24 16:45',
+    customerName: 'Niloy Rajib',
+    phone: '01789-123456',
+    altPhone: '01811223344',
+    customerEmail: 'niloyrajib@gmail.com',
+    address: 'Plot 18, Road 3, Sector 7, Uttara, Dhaka',
+    cityDivision: 'Inside Dhaka',
+    district: 'Dhaka',
+    thanaZone: 'Uttara',
+    deliveryCharge: 60,
+    items: [
+      {
+        productId: 'prod-2',
+        name: 'Lenovo LP40 Pro True Wireless Stereo Bluetooth Earbuds (TWS)',
+        image: 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=800&auto=format&fit=crop&q=80',
+        price: 1320,
+        quantity: 2,
+        color: 'Pure White'
+      }
+    ],
+    subtotal: 2640,
+    discount: 0,
+    total: 2700,
+    paymentMethod: 'cod',
+    paymentStatus: 'unpaid',
+    status: 'confirmed',
+    courierName: 'Steadfast Courier',
+    trackingNumber: 'ST-14584-DH01',
+    customerNotes: 'Deliver between 2 PM to 5 PM.',
+    confirmationCode: 'ST-14584-DH01',
+    fulfillmentId: '#BX-14585-F1',
+    salesChannel: 'Online Store',
+    timeline: [
+      {
+        status: 'pending',
+        title: 'Order Placed',
+        description: 'Order received via BanglaXpress Cash on Delivery checkout.',
+        timestamp: '24 Sep, 04:45 PM',
+        completed: true
+      },
+      {
+        status: 'confirmed',
+        title: 'Order Confirmed by Phone',
+        description: 'Customer service executive confirmed delivery address via phone call.',
+        timestamp: '24 Sep, 05:15 PM',
+        completed: true
+      }
+    ]
+  },
+  {
+    id: 'BX-14584',
+    createdAt: '25 Sept 2026, 19:05',
+    customerName: 'Jaarin Hassan',
+    phone: '01829101355',
+    altPhone: '01711223344',
+    customerEmail: 'jaarin.hassan@gmail.com',
+    address: 'South Banasree, Dhaka',
+    cityDivision: 'Inside Dhaka',
+    district: 'Dhaka',
+    thanaZone: 'South Banasree',
+    deliveryCharge: 60,
+    items: [
+      {
+        productId: 'prod-1',
+        name: 'T900 Ultra 2 Bluetooth Calling Smartwatch with 2.09" HD Display',
+        image: 'https://images.unsplash.com/photo-1579586337278-3befd40fd17a?w=800&auto=format&fit=crop&q=80',
+        price: 1390,
+        quantity: 1,
+        color: 'Midnight Black'
+      }
+    ],
+    subtotal: 1390,
+    discount: 0,
+    total: 1450,
+    paymentMethod: 'cod',
+    paymentStatus: 'unpaid',
+    status: 'pending',
+    courierName: 'Steadfast Express',
+    trackingNumber: 'EXP-400920',
+    customerNotes: 'Please call before delivery.',
+    confirmationCode: 'EXP-400920-JH',
+    fulfillmentId: '#BX-14584-F1',
+    salesChannel: 'Online Store',
+    timeline: [
+      {
+        status: 'pending',
+        title: 'Order Placed',
+        description: 'Order placed by Jaarin Hassan via Online Store Cash on Delivery.',
+        timestamp: '25 Sep, 07:05 PM',
+        completed: true
+      },
+      {
+        status: 'pending',
+        title: 'Payment Pending',
+        description: 'A ৳1,450.00 BDT payment is pending on Cash on Delivery (COD).',
+        timestamp: '25 Sep, 07:05 PM',
+        completed: true
+      },
+      {
+        status: 'confirmed',
+        title: 'Courier Booking Created',
+        description: 'Steadfast Express consignment #EXP-400920 created for delivery.',
+        timestamp: '25 Sep, 07:10 PM',
+        completed: false
+      }
+    ]
+  },
+  {
+    id: 'BX-1001',
+    createdAt: 'August 4, 2026 at 12:18 pm',
+    customerName: 'Muhtasim Ahmed Ahmed',
+    customerEmail: 'muhtasim.devscred@gmail.com',
+    phone: '+880 1534-761175',
+    address: '67/2 Moghal House Shantinagar, Jonaki Goli, 4th Floor, Dhaka, Bangladesh',
+    cityDivision: 'Inside Dhaka',
+    district: 'Dhaka',
+    thanaZone: 'Shantinagar',
+    deliveryCharge: 80,
+    items: [
+      {
+        productId: 'prod-bp-1',
+        name: 'Automatic Rechargeable Digital Touch Screen Wrist type Blood-Pressure Machine',
+        image: 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=800&auto=format&fit=crop&q=80',
+        price: 1020,
+        quantity: 1,
+        color: 'Standard White'
+      }
+    ],
+    subtotal: 1020,
+    discount: 0,
+    total: 1100,
+    paymentMethod: 'cod',
+    paymentStatus: 'paid',
+    status: 'delivered',
+    archived: true,
+    fulfillmentId: '#BX-1001-F1',
+    confirmationCode: 'PJP0FA5N7',
+    shippingWeight: 0.0,
+    salesChannel: 'Online Store',
+    courierName: 'Steadfast Courier',
+    trackingNumber: 'ST-1005-DH',
+    customerNotes: '4th Floor, Jonaki Goli, Shantinagar.',
+    timeline: [
+      {
+        status: 'pending',
+        title: 'Order Confirmation',
+        description: 'Confirmation #PJP0FA5N7 was generated for this order.',
+        timestamp: '12:18 PM',
+        completed: true
+      },
+      {
+        status: 'pending',
+        title: 'Payment Pending',
+        description: 'A ৳1,100.00 BDT payment is pending on Cash on Delivery (COD).',
+        timestamp: '12:18 PM',
+        completed: true
+      },
+      {
+        status: 'confirmed',
+        title: 'Confirmation Email Sent',
+        description: 'Order confirmation email was sent to Muhtasim Ahmed Ahmed (muhtasim.devscred@gmail.com).',
+        timestamp: '12:18 PM',
+        completed: true
+      },
+      {
+        status: 'shipped',
+        title: 'Marked as Fulfilled',
+        description: 'You marked 1 item as fulfilled from Shop location.',
+        timestamp: '11:34 PM',
+        completed: true
+      },
+      {
+        status: 'delivered',
+        title: 'Payment Marked Paid',
+        description: 'You manually marked ৳1,100.00 BDT as paid by Cash on Delivery (COD).',
+        timestamp: '11:34 PM',
+        completed: true
+      },
+      {
+        status: 'delivered',
+        title: 'Order Archived',
+        description: 'This order was archived.',
+        timestamp: '11:34 PM',
+        completed: true
+      }
+    ]
+  },
+  {
     id: 'BX-89210',
     createdAt: '2026-09-12 14:30',
     customerName: 'Tanvir Hossain',
@@ -944,24 +1253,47 @@ export const INITIAL_ORDERS: Order[] = [
 export const VALID_COUPONS: Coupon[] = [
   {
     code: 'BANGLA10',
+    title: '10% off for Smart Gadgets and Accessories',
     discountType: 'percentage',
     amount: 10,
     minSpend: 1000,
-    description: '10% instant discount on orders above ৳1,000'
+    description: '10% instant discount on orders above ৳1,000',
+    expiryDate: '2026-12-31',
+    status: 'active',
+    usageCount: 89
   },
   {
     code: 'EXPRESS50',
+    title: '৳50 flat discount for first order',
     discountType: 'fixed',
     amount: 50,
     minSpend: 800,
-    description: 'Flat ৳50 discount on your order'
+    description: 'Flat ৳50 discount on your order',
+    expiryDate: '2026-12-31',
+    status: 'active',
+    usageCount: 142
+  },
+  {
+    code: 'EID20',
+    title: '20% off Mega Festival Voucher',
+    discountType: 'percentage',
+    amount: 20,
+    minSpend: 1500,
+    description: '20% special discount on orders above ৳1,500',
+    expiryDate: '2026-06-30',
+    status: 'active',
+    usageCount: 57
   },
   {
     code: 'FREESHIP',
+    title: '৳60 delivery subsidy on orders above ৳2,000',
     discountType: 'fixed',
     amount: 60,
     minSpend: 2000,
-    description: '৳60 off on delivery fee for orders above ৳2,000'
+    description: '৳60 off on delivery fee for orders above ৳2,000',
+    expiryDate: '2026-06-30',
+    status: 'active',
+    usageCount: 64
   }
 ];
 

@@ -1,12 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { X, ShieldCheck, Truck, CheckCircle, CreditCard, Banknote, AlertCircle, Phone, MapPin, User, FileText, Check, ArrowLeft, Info, Store } from 'lucide-react';
+import { X, ShieldCheck, Truck, CheckCircle, CreditCard, Banknote, AlertCircle, Phone, MapPin, User, FileText, Check, ArrowLeft, Info, Store, Tag, Mail } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { CartItem, Coupon, Order, PaymentMethod, CustomPaymentGateway, VendorPaymentConfig } from '../types';
-import { STORE_SETTINGS } from '../data/mockData';
+import { STORE_SETTINGS, VALID_COUPONS } from '../data/mockData';
 import {
   getPaymentConfigForVendor,
   VENDOR_PAYMENT_RULES_EVENT
 } from '../utils/vendorPayments';
+import {
+  recordAbandonedCheckout,
+  markCartAsRecovered
+} from '../utils/abandonedCartManager';
+import {
+  getStoredIntegrationApps,
+  APPS_SETTINGS_UPDATED_EVENT,
+  AppIntegrationSetting
+} from '../utils/appIntegrations';
+import { TRANSLATIONS, getProductTitle } from '../utils/translations';
 
 interface FastCheckoutModalProps {
   isOpen: boolean;
@@ -19,6 +29,8 @@ interface FastCheckoutModalProps {
     size?: string;
   } | null;
   appliedCoupon: Coupon | null;
+  coupons?: Coupon[];
+  lang?: 'en' | 'bn';
   onOrderCompleted: (order: Order) => void;
 }
 
@@ -27,10 +39,24 @@ export const FastCheckoutModal: React.FC<FastCheckoutModalProps> = ({
   onClose,
   cartItems,
   directProduct,
-  appliedCoupon,
+  appliedCoupon: initialCoupon,
+  coupons = VALID_COUPONS,
+  lang = 'bn',
   onOrderCompleted
 }) => {
   if (!isOpen) return null;
+
+  const t = TRANSLATIONS[lang];
+
+  // Coupon state in checkout
+  const [currentCoupon, setCurrentCoupon] = useState<Coupon | null>(initialCoupon);
+  const [couponCodeInput, setCouponCodeInput] = useState('');
+  const [couponError, setCouponError] = useState('');
+  const [couponSuccess, setCouponSuccess] = useState('');
+
+  useEffect(() => {
+    setCurrentCoupon(initialCoupon);
+  }, [initialCoupon]);
 
   // Checkout Items: either direct 1-click product or cart items
   const itemsToCheckout = directProduct
@@ -86,6 +112,7 @@ export const FastCheckoutModal: React.FC<FastCheckoutModalProps> = ({
 
   // Form states
   const [customerName, setCustomerName] = useState('');
+  const [customerEmail, setCustomerEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
   const [cityDivision, setCityDivision] = useState<'Inside Dhaka' | 'Outside Dhaka'>('Inside Dhaka');
@@ -97,6 +124,32 @@ export const FastCheckoutModal: React.FC<FastCheckoutModalProps> = ({
   const [customerNotes, setCustomerNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+
+  // Auto-log abandoned checkout when customer enters an email address
+  useEffect(() => {
+    const trimmed = customerEmail.trim();
+    // Validate basic email format
+    if (trimmed.length > 5 && trimmed.includes('@') && trimmed.includes('.')) {
+      const abandonedItems = itemsToCheckout.map((it) => ({
+        productId: it.product.id,
+        name: it.product.name,
+        image: it.product.images[0],
+        price: it.product.price,
+        quantity: it.quantity,
+        color: it.selectedColor,
+        size: it.selectedSize
+      }));
+
+      recordAbandonedCheckout({
+        email: trimmed,
+        customerName: customerName.trim() || undefined,
+        phone: phone.trim() || undefined,
+        cityDivision,
+        items: abandonedItems,
+        subtotal
+      });
+    }
+  }, [customerEmail, customerName, phone, cityDivision, subtotal, itemsToCheckout]);
 
   // Sync payment method when vendor config changes
   useEffect(() => {
@@ -172,6 +225,55 @@ export const FastCheckoutModal: React.FC<FastCheckoutModalProps> = ({
     return () => window.removeEventListener('payment_gateways_updated', loadGateways);
   }, []);
 
+  // Load connected integration apps (bKash, Nagad, Pathao, Steadfast, SMS)
+  const [integrationApps, setIntegrationApps] = useState<AppIntegrationSetting[]>(() =>
+    getStoredIntegrationApps()
+  );
+
+  useEffect(() => {
+    const handleAppsUpdate = () => {
+      setIntegrationApps(getStoredIntegrationApps());
+    };
+    handleAppsUpdate();
+    window.addEventListener(APPS_SETTINGS_UPDATED_EVENT, handleAppsUpdate);
+    return () => window.removeEventListener(APPS_SETTINGS_UPDATED_EVENT, handleAppsUpdate);
+  }, []);
+
+  const isBkashIntegrationEnabled = integrationApps.find((a) => a.id === 'app-bkash')?.enabled ?? true;
+  const isNagadIntegrationEnabled = integrationApps.find((a) => a.id === 'app-nagad')?.enabled ?? true;
+  const isPathaoIntegrationEnabled = integrationApps.find((a) => a.id === 'app-pathao')?.enabled ?? true;
+  const isSteadfastIntegrationEnabled = integrationApps.find((a) => a.id === 'app-steadfast')?.enabled ?? true;
+
+  // Selected courier based on enabled integrations and customer preference
+  const availableCouriers = [
+    ...(isSteadfastIntegrationEnabled ? [{ id: 'steadfast', name: 'Steadfast Courier API', tag: 'Fast COD' }] : []),
+    ...(isPathaoIntegrationEnabled ? [{ id: 'pathao', name: 'Pathao Courier Logistics', tag: 'Automated' }] : [])
+  ];
+
+  const [selectedCourierId, setSelectedCourierId] = useState<string>(() => {
+    if (isSteadfastIntegrationEnabled) return 'steadfast';
+    if (isPathaoIntegrationEnabled) return 'pathao';
+    return 'default';
+  });
+
+  // Keep selected courier aligned with enabled couriers
+  useEffect(() => {
+    if (selectedCourierId === 'steadfast' && !isSteadfastIntegrationEnabled) {
+      setSelectedCourierId(isPathaoIntegrationEnabled ? 'pathao' : 'default');
+    } else if (selectedCourierId === 'pathao' && !isPathaoIntegrationEnabled) {
+      setSelectedCourierId(isSteadfastIntegrationEnabled ? 'steadfast' : 'default');
+    }
+  }, [isSteadfastIntegrationEnabled, isPathaoIntegrationEnabled, selectedCourierId]);
+
+  // Adjust payment method if selected payment is disabled from Apps
+  useEffect(() => {
+    if (paymentMethod === 'bkash' && !isBkashIntegrationEnabled) {
+      setPaymentMethod('cod');
+    } else if (paymentMethod === 'nagad' && !isNagadIntegrationEnabled) {
+      setPaymentMethod('cod');
+    }
+  }, [isBkashIntegrationEnabled, isNagadIntegrationEnabled, paymentMethod]);
+
   // Delivery fee logic
   const isFreeDelivery = subtotal >= STORE_SETTINGS.freeDeliveryThreshold;
   const deliveryCharge = isFreeDelivery
@@ -182,13 +284,41 @@ export const FastCheckoutModal: React.FC<FastCheckoutModalProps> = ({
 
   // Coupon discount calculation
   let discountAmount = 0;
-  if (appliedCoupon) {
-    if (appliedCoupon.discountType === 'percentage') {
-      discountAmount = Math.round((subtotal * appliedCoupon.amount) / 100);
+  if (currentCoupon) {
+    if (currentCoupon.discountType === 'percentage') {
+      discountAmount = Math.round((subtotal * currentCoupon.amount) / 100);
     } else {
-      discountAmount = appliedCoupon.amount;
+      discountAmount = currentCoupon.amount;
     }
   }
+
+  const handleApplyCouponCheckout = (e: React.FormEvent) => {
+    e.preventDefault();
+    setCouponError('');
+    setCouponSuccess('');
+
+    const searchList = coupons && coupons.length > 0 ? coupons : VALID_COUPONS;
+    const matched = searchList.find((c) => c.code.toUpperCase() === couponCodeInput.trim().toUpperCase());
+    if (!matched) {
+      setCouponError('অবৈধ কুপন কোড (Invalid coupon code)');
+      return;
+    }
+
+    const todayIso = new Date().toISOString().split('T')[0];
+    if (matched.status === 'expired' || (matched.expiryDate && matched.expiryDate < todayIso)) {
+      setCouponError(`কুপন '${matched.code}' এর মেয়াদ শেষ হয়ে গেছে (Expired)`);
+      return;
+    }
+
+    if (subtotal < matched.minSpend) {
+      setCouponError(`এই কুপনের জন্য ন্যূনতম ৳${matched.minSpend.toLocaleString()} টাকার অর্ডার আবশ্যক`);
+      return;
+    }
+
+    setCurrentCoupon(matched);
+    setCouponSuccess(`কুপন '${matched.code}' সফলভাবে প্রয়োগ করা হয়েছে!`);
+    setCouponCodeInput('');
+  };
 
   const grandTotal = Math.max(0, subtotal - discountAmount + deliveryCharge);
 
@@ -253,13 +383,20 @@ export const FastCheckoutModal: React.FC<FastCheckoutModalProps> = ({
         })),
         subtotal,
         discount: discountAmount,
-        couponCode: appliedCoupon?.code,
+        couponCode: currentCoupon?.code,
         total: grandTotal,
         paymentMethod,
         paymentStatus: paymentMethod === 'cod' ? 'unpaid' : 'paid',
         trxId: trxId.trim() || undefined,
         status: 'pending',
-        courierName: cityDivision === 'Inside Dhaka' ? 'Steadfast Express' : 'Pathao Courier Hub',
+        courierName:
+          selectedCourierId === 'steadfast' && isSteadfastIntegrationEnabled
+            ? 'Steadfast Express API'
+            : selectedCourierId === 'pathao' && isPathaoIntegrationEnabled
+            ? 'Pathao Courier Logistics'
+            : cityDivision === 'Inside Dhaka'
+            ? 'Standard Dhaka Courier'
+            : 'Standard Regional Courier',
         trackingNumber: `EXP-${Math.floor(100000 + Math.random() * 900000)}`,
         customerNotes: customerNotes.trim() || undefined,
         vendor: currentVendor,
@@ -314,6 +451,11 @@ export const FastCheckoutModal: React.FC<FastCheckoutModalProps> = ({
       }
 
       setIsSubmitting(false);
+      if (customerEmail.trim()) {
+        markCartAsRecovered(customerEmail.trim());
+      } else if (cleanPhone) {
+        markCartAsRecovered(cleanPhone);
+      }
       onOrderCompleted(newOrder);
       onClose();
     }, 800);
@@ -334,16 +476,18 @@ export const FastCheckoutModal: React.FC<FastCheckoutModalProps> = ({
             </div>
             <div>
               <h2 className="text-base sm:text-lg font-black tracking-tight">
-                ১-ক্লিক দ্রুত চেকআউট (Fast Express Checkout)
+                {lang === 'en' ? 'Fast Express Checkout' : '১-ক্লিক দ্রুত চেকআউট (Fast Express Checkout)'}
               </h2>
               <p className="text-xs text-rose-100 font-medium">
-                অর্ডার করতে নিচের তথ্যগুলো দিয়ে ফরমটি পূরণ করুন
+                {lang === 'en'
+                  ? 'Fill out the simple form below to place your order'
+                  : 'অর্ডার করতে নিচের তথ্যগুলো দিয়ে ফরমটি পূরণ করুন'}
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-full hover:bg-white/20 text-white transition-colors"
+            className="p-1.5 rounded-full hover:bg-white/20 text-white transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -367,7 +511,7 @@ export const FastCheckoutModal: React.FC<FastCheckoutModalProps> = ({
               <div>
                 <label className="block text-xs font-bold text-gray-800 mb-1 flex items-center gap-1">
                   <User className="w-3.5 h-3.5 text-rose-600" />
-                  <span>আপনার পুরো নাম (Full Name) *</span>
+                  <span>{lang === 'en' ? 'Your Full Name *' : 'আপনার পুরো নাম (Full Name) *'}</span>
                 </label>
                 <input
                   id="checkout-name-input"
@@ -375,7 +519,28 @@ export const FastCheckoutModal: React.FC<FastCheckoutModalProps> = ({
                   required
                   value={customerName}
                   onChange={(e) => setCustomerName(e.target.value)}
-                  placeholder="যেমন: মোঃ তানভীর হাসান"
+                  placeholder={lang === 'en' ? 'e.g. John Doe / Tanvir Hasan' : 'যেমন: মোঃ তানভীর হাসান'}
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-300 rounded-xl text-xs sm:text-sm text-gray-900 outline-none focus:bg-white focus:border-rose-600 focus:ring-2 focus:ring-rose-100 transition-all"
+                />
+              </div>
+
+              {/* Email Address (for order receipts & abandoned recovery) */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-bold text-gray-800 flex items-center gap-1">
+                    <Mail className="w-3.5 h-3.5 text-rose-600" />
+                    <span>{lang === 'en' ? 'Email Address' : 'ইমেইল এড্রেস (Email Address)'}</span>
+                  </label>
+                  <span className="text-[10px] text-gray-400 font-medium">
+                    {lang === 'en' ? 'For receipts & order tracking' : 'রশিদ ও ডিসকাউন্ট অফার পেতে'}
+                  </span>
+                </div>
+                <input
+                  id="checkout-email-input"
+                  type="email"
+                  value={customerEmail}
+                  onChange={(e) => setCustomerEmail(e.target.value)}
+                  placeholder={lang === 'en' ? 'e.g. customer@example.com' : 'যেমন: customer@example.com'}
                   className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-300 rounded-xl text-xs sm:text-sm text-gray-900 outline-none focus:bg-white focus:border-rose-600 focus:ring-2 focus:ring-rose-100 transition-all"
                 />
               </div>
@@ -384,7 +549,7 @@ export const FastCheckoutModal: React.FC<FastCheckoutModalProps> = ({
               <div>
                 <label className="block text-xs font-bold text-gray-800 mb-1 flex items-center gap-1">
                   <Phone className="w-3.5 h-3.5 text-rose-600" />
-                  <span>১১ ডিজিটের মোবাইল নম্বর (Phone Number) *</span>
+                  <span>{lang === 'en' ? '11-Digit Mobile Number *' : '১১ ডিজিটের মোবাইল নম্বর (Phone Number) *'}</span>
                 </label>
                 <input
                   id="checkout-phone-input"
@@ -392,7 +557,7 @@ export const FastCheckoutModal: React.FC<FastCheckoutModalProps> = ({
                   required
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  placeholder="যেমন: 01712345678"
+                  placeholder={lang === 'en' ? 'e.g. 01712345678' : 'যেমন: 01712345678'}
                   className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-300 rounded-xl text-xs sm:text-sm text-gray-900 font-mono outline-none focus:bg-white focus:border-rose-600 focus:ring-2 focus:ring-rose-100 transition-all"
                 />
               </div>
@@ -401,7 +566,7 @@ export const FastCheckoutModal: React.FC<FastCheckoutModalProps> = ({
               <div>
                 <label className="block text-xs font-bold text-gray-800 mb-1.5 flex items-center gap-1">
                   <Truck className="w-3.5 h-3.5 text-rose-600" />
-                  <span>ডেলিভারি এলাকা নির্বাচন করুন (Delivery Area) *</span>
+                  <span>{lang === 'en' ? 'Select Delivery Area *' : 'ডেলিভারি এলাকা নির্বাচন করুন (Delivery Area) *'}</span>
                 </label>
                 <div className="grid grid-cols-2 gap-2.5">
                   <button
@@ -410,42 +575,86 @@ export const FastCheckoutModal: React.FC<FastCheckoutModalProps> = ({
                       setCityDivision('Inside Dhaka');
                       setDistrict('Dhaka');
                     }}
-                    className={`p-3 rounded-xl border text-left transition-all ${
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
                       cityDivision === 'Inside Dhaka'
                         ? 'border-rose-600 bg-rose-50/70 ring-2 ring-rose-200'
                         : 'border-gray-200 hover:border-gray-300 bg-gray-50'
                     }`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-gray-900">ঢাকা সিটির ভেতরে</span>
+                      <span className="text-xs font-bold text-gray-900">
+                        {lang === 'en' ? 'Inside Dhaka City' : 'ঢাকা সিটির ভেতরে'}
+                      </span>
                       <span className="text-xs font-black text-rose-600">৳{STORE_SETTINGS.deliveryInsideDhaka}</span>
                     </div>
-                    <p className="text-[10.5px] text-gray-500 mt-0.5">২৪ - ৪৮ ঘণ্টায় ডেলিভারি</p>
+                    <p className="text-[10.5px] text-gray-500 mt-0.5">
+                      {lang === 'en' ? 'Delivery in 24 - 48 hours' : '২৪ - ৪৮ ঘণ্টায় ডেলিভারি'}
+                    </p>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setCityDivision('Outside Dhaka')}
-                    className={`p-3 rounded-xl border text-left transition-all ${
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
                       cityDivision === 'Outside Dhaka'
                         ? 'border-rose-600 bg-rose-50/70 ring-2 ring-rose-200'
                         : 'border-gray-200 hover:border-gray-300 bg-gray-50'
                     }`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-gray-900">ঢাকা সিটির বাইরে</span>
+                      <span className="text-xs font-bold text-gray-900">
+                        {lang === 'en' ? 'Outside Dhaka City' : 'ঢাকা সিটির বাইরে'}
+                      </span>
                       <span className="text-xs font-black text-rose-600">৳{STORE_SETTINGS.deliveryOutsideDhaka}</span>
                     </div>
-                    <p className="text-[10.5px] text-gray-500 mt-0.5">সারাদেশে ৪৮ - ৭২ ঘণ্টায়</p>
+                    <p className="text-[10.5px] text-gray-500 mt-0.5">
+                      {lang === 'en' ? 'Nationwide 48 - 72 hours' : 'সারাদেশে ৪৮ - ৭২ ঘণ্টায়'}
+                    </p>
                   </button>
                 </div>
+
+                {/* Connected Courier Partners (Visible only when integrations are enabled in Apps) */}
+                {availableCouriers.length > 0 && (
+                  <div className="mt-2.5 pt-2 border-t border-gray-100">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[11px] font-semibold text-gray-600 flex items-center gap-1">
+                        <span>সক্রিয় লজিস্টিকস পার্টনার (Active Couriers):</span>
+                      </span>
+                      <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                        {availableCouriers.length} টি সচল
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      {availableCouriers.map((courier) => (
+                        <button
+                          key={courier.id}
+                          type="button"
+                          onClick={() => setSelectedCourierId(courier.id)}
+                          className={`p-2 rounded-lg border text-left flex items-center justify-between transition-all ${
+                            selectedCourierId === courier.id
+                              ? 'border-rose-600 bg-rose-50/50 ring-1 ring-rose-300 font-bold text-gray-900'
+                              : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                          }`}
+                        >
+                          <div className="flex items-center gap-1.5 truncate">
+                            <Truck className={`w-3.5 h-3.5 shrink-0 ${courier.id === 'pathao' ? 'text-red-500' : 'text-emerald-600'}`} />
+                            <span className="text-[11px] truncate">{courier.name}</span>
+                          </div>
+                          <span className="text-[9px] font-mono px-1 py-0.5 bg-gray-100 rounded text-gray-600 shrink-0 ml-1">
+                            {courier.tag}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Full Address */}
               <div>
                 <label className="block text-xs font-bold text-gray-800 mb-1 flex items-center gap-1">
                   <MapPin className="w-3.5 h-3.5 text-rose-600" />
-                  <span>সম্পূর্ণ ডেলিভারি ঠিকানা (Detailed Delivery Address) *</span>
+                  <span>{lang === 'en' ? 'Detailed Delivery Address *' : 'সম্পূর্ণ ডেলিভারি ঠিকানা (Detailed Delivery Address) *'}</span>
                 </label>
                 <textarea
                   id="checkout-address-input"
@@ -453,24 +662,18 @@ export const FastCheckoutModal: React.FC<FastCheckoutModalProps> = ({
                   rows={2}
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
-                  placeholder="যেমন: বাসা/ফ্ল্যাট নং, রোড নং, এলাকা/থানা, জেলা..."
+                  placeholder={lang === 'en' ? 'House no, Road no, Area, Thana, District...' : 'যেমন: বাসা/ফ্ল্যাট নং, রোড নং, এলাকা/থানা, জেলা...'}
                   className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-300 rounded-xl text-xs sm:text-sm text-gray-900 outline-none focus:bg-white focus:border-rose-600 focus:ring-2 focus:ring-rose-100 transition-all resize-none"
                 />
               </div>
 
-              {/* Payment Methods with Vendor-Wise Customization */}
+              {/* Payment Methods with Customization */}
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-xs font-bold text-gray-800 flex items-center gap-1">
                     <CreditCard className="w-3.5 h-3.5 text-rose-600" />
-                    <span>পেমেন্ট পদ্ধতি নির্বাচন করুন (Payment Method) *</span>
+                    <span>{lang === 'en' ? 'Select Payment Method *' : 'পেমেন্ট পদ্ধতি নির্বাচন করুন (Payment Method) *'}</span>
                   </label>
-                  {currentVendor && (
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-gray-100 text-gray-700 border border-gray-200 flex items-center gap-1">
-                      <Store className="w-3 h-3 text-rose-600" />
-                      ভেন্ডর: <strong className="text-gray-900 font-bold">{currentVendor}</strong>
-                    </span>
-                  )}
                 </div>
 
                 {/* Advance payment notice if enabled for this vendor */}
@@ -479,22 +682,24 @@ export const FastCheckoutModal: React.FC<FastCheckoutModalProps> = ({
                     <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                     <div>
                       <p className="font-bold">
-                        অগ্রিম পেমেন্ট শর্ত: ৳{vendorConfig.advanceAmount || 100} অগ্রিম পরিশোধ করতে হবে
+                        {lang === 'en'
+                          ? `Advance Payment Required: ৳${vendorConfig.advanceAmount || 100}`
+                          : `অগ্রিম পেমেন্ট শর্ত: ৳${vendorConfig.advanceAmount || 100} অগ্রিম পরিশোধ করতে হবে`}
                       </p>
                       <p className="text-[11px] text-amber-800 mt-0.5">
-                        {vendorConfig.advanceNote || 'এই ভেন্ডরের অর্ডারে ডেলিভারি চার্জ বিকাশ বা নগদে অগ্রিম পরিশোধ সাপেক্ষে কনফার্ম হবে।'}
+                        {vendorConfig.advanceNote || (lang === 'en' ? 'Delivery charge is required in advance via bKash/Nagad.' : 'এই ভেন্ডরের অর্ডারে ডেলিভারি চার্জ বিকাশ বা নগদে অগ্রিম পরিশোধ সাপেক্ষে কনফার্ম হবে।')}
                       </p>
                     </div>
                   </div>
                 )}
 
-                {/* Vendor Checkout Note */}
-                {vendorConfig.checkoutNote && (
-                  <div className="mb-2.5 px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-[11px] text-slate-700 flex items-start gap-1.5">
-                    <Info className="w-3.5 h-3.5 text-slate-500 shrink-0 mt-0.5" />
-                    <span>{vendorConfig.checkoutNote}</span>
-                  </div>
-                )}
+                {/* Product / Delivery Verification Note */}
+                <div className="mb-2.5 px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-[11px] text-slate-700 flex items-start gap-1.5">
+                  <Info className="w-3.5 h-3.5 text-slate-500 shrink-0 mt-0.5" />
+                  <span>
+                    {vendorConfig.checkoutNote || (lang === 'en' ? 'Inspect and check all original products at delivery time before payment.' : 'অরিজিনাল সকল প্রোডাক্ট ডেলিভারির সময় চেক করে দেখে মূল্য পরিশোধ করুন।')}
+                  </span>
+                </div>
                 
                 <div className="space-y-2">
                   {/* Cash on delivery */}
@@ -517,31 +722,28 @@ export const FastCheckoutModal: React.FC<FastCheckoutModalProps> = ({
                         <div>
                           <p className="text-xs font-bold text-gray-900 flex items-center gap-1.5">
                             <Banknote className="w-4 h-4 text-emerald-600" />
-                            <span>ক্যাশ অন ডেলিভারি (Cash on Delivery)</span>
+                            <span>{lang === 'en' ? 'Cash on Delivery (COD)' : 'ক্যাশ অন ডেলিভারি (Cash on Delivery)'}</span>
                           </p>
                           <p className="text-[11px] text-gray-500">
-                            পণ্য হাতে পেয়ে দেখে মূল্য পরিশোধ করুন
+                            {lang === 'en' ? 'Pay cash after receiving and inspecting the package' : 'পণ্য হাতে পেয়ে দেখে মূল্য পরিশোধ করুন'}
                           </p>
                         </div>
                       </div>
                       <span className="text-[11px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-bold">
-                        জনপ্রিয়
+                        {lang === 'en' ? 'Popular' : 'জনপ্রিয়'}
                       </span>
                     </label>
                   ) : (
-                    <div className="p-2.5 rounded-xl border border-dashed border-gray-200 bg-gray-50 text-gray-400 text-xs flex items-center justify-between opacity-80">
-                      <div className="flex items-center gap-2">
-                        <Banknote className="w-4 h-4 text-gray-400" />
-                        <span className="text-[11px]">ক্যাশ অন ডেলিভারি (এই ভেন্ডরের জন্য প্রযোজ্য নয়)</span>
-                      </div>
-                      <span className="text-[9px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded font-medium">
-                        COD বন্ধ
+                    <div className="p-2.5 bg-gray-100 rounded-xl text-gray-400 text-xs flex items-center gap-2">
+                      <Banknote className="w-4 h-4" />
+                      <span className="text-[11px]">
+                        {lang === 'en' ? 'Cash on Delivery (Not available for this vendor)' : 'ক্যাশ অন ডেলিভারি (এই ভেন্ডরের জন্য প্রযোজ্য নয়)'}
                       </span>
                     </div>
                   )}
 
-                  {/* bKash */}
-                  {vendorConfig.allowedPaymentMethods?.includes('bkash') && (
+                  {/* bKash - shown only if allowed by vendor AND enabled in Apps/Integrations */}
+                  {isBkashIntegrationEnabled && vendorConfig.allowedPaymentMethods?.includes('bkash') && (
                     <label
                       className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${
                         paymentMethod === 'bkash'
@@ -572,8 +774,8 @@ export const FastCheckoutModal: React.FC<FastCheckoutModalProps> = ({
                     </label>
                   )}
 
-                  {/* Nagad */}
-                  {vendorConfig.allowedPaymentMethods?.includes('nagad') && (
+                  {/* Nagad - shown only if allowed by vendor AND enabled in Apps/Integrations */}
+                  {isNagadIntegrationEnabled && vendorConfig.allowedPaymentMethods?.includes('nagad') && (
                     <label
                       className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${
                         paymentMethod === 'nagad'
@@ -706,7 +908,7 @@ export const FastCheckoutModal: React.FC<FastCheckoutModalProps> = ({
             <div className="md:col-span-5 bg-gray-50 rounded-2xl p-4 border border-gray-200 flex flex-col justify-between">
               <div>
                 <h3 className="text-xs font-bold uppercase tracking-wider text-gray-700 mb-3 pb-2 border-b border-gray-200">
-                  অর্ডারকৃত পণ্যের তালিকা ({itemsToCheckout.length})
+                  {lang === 'en' ? `Order Items (${itemsToCheckout.length})` : `অর্ডারকৃত পণ্যের তালিকা (${itemsToCheckout.length})`}
                 </h3>
 
                 {/* Items list */}
@@ -720,15 +922,15 @@ export const FastCheckoutModal: React.FC<FastCheckoutModalProps> = ({
                       />
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-bold text-gray-900 truncate">
-                          {it.product.name}
+                          {getProductTitle(it.product, lang)}
                         </p>
                         {it.selectedColor && (
                           <p className="text-[10.5px] text-gray-500 truncate">
-                            রঙ: {it.selectedColor}
+                            {lang === 'en' ? 'Color: ' : 'রঙ: '}{it.selectedColor}
                           </p>
                         )}
                         <div className="flex justify-between items-center text-xs mt-0.5">
-                          <span className="text-gray-500">পরিমাণ: {it.quantity}</span>
+                          <span className="text-gray-500">{lang === 'en' ? 'Qty: ' : 'পরিমাণ: '}{it.quantity}</span>
                           <span className="font-bold text-rose-600">
                             ৳{(it.product.price * it.quantity).toLocaleString()}
                           </span>
@@ -738,25 +940,69 @@ export const FastCheckoutModal: React.FC<FastCheckoutModalProps> = ({
                   ))}
                 </div>
 
+                {/* Coupon Code Section in Checkout */}
+                <div className="mt-3 pt-3 border-t border-gray-200">
+                  {currentCoupon ? (
+                    <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 px-3 py-2 rounded-xl text-xs">
+                      <div className="flex items-center gap-1.5 text-emerald-800">
+                        <Tag className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>{lang === 'en' ? 'Coupon: ' : 'কুপন কোড: '}<strong>{currentCoupon.code}</strong> (-৳{discountAmount})</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCurrentCoupon(null);
+                          setCouponSuccess('');
+                          setCouponError('');
+                        }}
+                        className="text-rose-600 hover:text-rose-800 font-bold text-xs cursor-pointer"
+                      >
+                        {lang === 'en' ? 'Remove' : 'মুছুন'}
+                      </button>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="flex gap-1.5">
+                        <input
+                          type="text"
+                          value={couponCodeInput}
+                          onChange={(e) => setCouponCodeInput(e.target.value)}
+                          placeholder={lang === 'en' ? 'Enter coupon code' : 'কুপন কোড লিখুন'}
+                          className="flex-1 px-2.5 py-1.5 text-xs uppercase bg-white border border-gray-300 rounded-lg outline-none focus:border-rose-500 font-mono"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleApplyCouponCheckout}
+                          className="px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white rounded-lg text-xs font-bold cursor-pointer"
+                        >
+                          {lang === 'en' ? 'Apply' : 'প্রয়োগ'}
+                        </button>
+                      </div>
+                      {couponError && <p className="text-[11px] text-rose-600 mt-1">{couponError}</p>}
+                      {couponSuccess && <p className="text-[11px] text-emerald-600 mt-1">{couponSuccess}</p>}
+                    </div>
+                  )}
+                </div>
+
                 {/* Calculation breakdown */}
                 <div className="mt-4 pt-3 border-t border-gray-200 space-y-1.5 text-xs text-gray-600">
                   <div className="flex justify-between">
-                    <span>পণ্যের মোট দাম (Subtotal)</span>
+                    <span>{lang === 'en' ? 'Subtotal' : 'পণ্যের মোট দাম (Subtotal)'}</span>
                     <span className="font-semibold text-gray-900">৳{subtotal.toLocaleString()}</span>
                   </div>
 
                   {discountAmount > 0 && (
                     <div className="flex justify-between text-emerald-600 font-semibold">
-                      <span>কুপন ডিসকাউন্ট</span>
+                      <span>{lang === 'en' ? 'Coupon Discount' : 'কুপন ডিসকাউন্ট'}</span>
                       <span>-৳{discountAmount.toLocaleString()}</span>
                     </div>
                   )}
 
                   <div className="flex justify-between">
-                    <span>ডেলিভারি চার্জ</span>
+                    <span>{lang === 'en' ? 'Delivery Charge' : 'ডেলিভারি চার্জ'}</span>
                     <span className="font-semibold text-gray-900">
                       {deliveryCharge === 0 ? (
-                        <span className="text-emerald-600 font-bold">ফ্রি ডেলিভারি</span>
+                        <span className="text-emerald-600 font-bold">{lang === 'en' ? 'Free Delivery' : 'ফ্রি ডেলিভারি'}</span>
                       ) : (
                         `৳${deliveryCharge}`
                       )}
@@ -764,7 +1010,7 @@ export const FastCheckoutModal: React.FC<FastCheckoutModalProps> = ({
                   </div>
 
                   <div className="flex justify-between text-sm font-black text-gray-900 pt-2 border-t border-gray-200">
-                    <span>সর্বমোট প্রদেয় বিল:</span>
+                    <span>{lang === 'en' ? 'Total Amount Payable:' : 'সর্বমোট প্রদেয় বিল:'}</span>
                     <span className="text-lg text-rose-600 font-mono font-black">
                       ৳{grandTotal.toLocaleString()}
                     </span>
@@ -774,10 +1020,12 @@ export const FastCheckoutModal: React.FC<FastCheckoutModalProps> = ({
                 <div className="mt-3 p-2.5 bg-emerald-50 rounded-xl border border-emerald-200 text-[11px] text-emerald-800 space-y-1">
                   <p className="flex items-center gap-1 font-semibold">
                     <Check className="w-3.5 h-3.5 text-emerald-600" />
-                    কোনো অগ্রিম পেমেন্ট ছাড়াই অর্ডার করুন
+                    {lang === 'en' ? 'Order without any advance payment' : 'কোনো অগ্রিম পেমেন্ট ছাড়াই অর্ডার করুন'}
                   </p>
                   <p className="text-emerald-700">
-                    পণ্য রিসিভ করে চেক করার পর ডেলিভারি ম্যানকে সম্পূর্ণ মূল্য পরিশোধ করবেন।
+                    {lang === 'en'
+                      ? 'Inspect the package upon delivery before paying the delivery agent.'
+                      : 'পণ্য রিসিভ করে চেক করার পর ডেলিভারি ম্যানকে সম্পূর্ণ মূল্য পরিশোধ করবেন।'}
                   </p>
                 </div>
               </div>
@@ -795,7 +1043,11 @@ export const FastCheckoutModal: React.FC<FastCheckoutModalProps> = ({
                   ) : (
                     <>
                       <CheckCircle className="w-5 h-5" />
-                      <span>অর্ডার কনফার্ম করুন • ৳{grandTotal.toLocaleString()}</span>
+                      <span>
+                        {lang === 'en'
+                          ? `Confirm Order • ৳${grandTotal.toLocaleString()}`
+                          : `অর্ডার কনফার্ম করুন • ৳${grandTotal.toLocaleString()}`}
+                      </span>
                     </>
                   )}
                 </button>

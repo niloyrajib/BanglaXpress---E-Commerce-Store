@@ -2,14 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Zap, ShoppingCart, ArrowRight, Shield, Truck } from 'lucide-react';
 import { STORE_SETTINGS } from '../../data/mockData';
 import { ThemeConfig } from '../../types';
+import { TRANSLATIONS } from '../../utils/translations';
 
 interface HeroBannerProps {
   onShopNow: () => void;
   onSelectCategory: (cat: string) => void;
   heroConfig?: ThemeConfig['hero'];
+  lang?: 'en' | 'bn';
 }
 
-const SLIDES = [
+const SLIDES_BN = [
   {
     id: 1,
     badge: '🔥 মেগা গ্যাজেট অফার ২০২৬',
@@ -51,16 +53,61 @@ const SLIDES = [
   }
 ];
 
+const SLIDES_EN = [
+  {
+    id: 1,
+    badge: '🔥 Mega Gadget Deals 2026',
+    title: 'T900 Ultra 2 Smartwatch',
+    subtitle: 'Huge 2.09" HD Display, Bluetooth Calling & Wireless Fast Charger',
+    priceText: 'Only ৳1,390',
+    regularPrice: '৳2,250',
+    discount: '38% OFF',
+    category: 'Smart Watches',
+    image: 'https://images.unsplash.com/photo-1579586337278-3befd40fd17a?w=900&auto=format&fit=crop&q=80',
+    bgGradient: 'from-rose-900 via-slate-900 to-indigo-950',
+    accentColor: 'bg-rose-500'
+  },
+  {
+    id: 2,
+    badge: '⚡ Hi-Fi Audio Fest',
+    title: 'Lenovo LP40 Pro TWS Earbuds',
+    subtitle: 'Crystal clear acoustic sound, punchy deep bass & 5 hours playtime',
+    priceText: 'Only ৳890',
+    regularPrice: '৳1,450',
+    discount: '39% OFF',
+    category: 'Earbuds & Audio',
+    image: 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=900&auto=format&fit=crop&q=80',
+    bgGradient: 'from-purple-950 via-slate-900 to-blue-950',
+    accentColor: 'bg-purple-500'
+  },
+  {
+    id: 3,
+    badge: '🧢 Premium Caps Collection',
+    title: 'New York Yankees Classic Cap',
+    subtitle: '100% pure washed cotton fabric, 3D embroidery stitched design',
+    priceText: 'Only ৳490',
+    regularPrice: '৳850',
+    discount: '42% OFF',
+    category: "Men's Caps & Fashion",
+    image: 'https://images.unsplash.com/photo-1588850561407-ed78c282e89b?w=900&auto=format&fit=crop&q=80',
+    bgGradient: 'from-amber-950 via-slate-900 to-stone-900',
+    accentColor: 'bg-amber-500'
+  }
+];
+
 export const HeroBanner: React.FC<HeroBannerProps> = ({
   onShopNow,
   onSelectCategory,
-  heroConfig
+  heroConfig,
+  lang = 'bn'
 }) => {
   if (heroConfig && !heroConfig.enabled) {
     return null;
   }
 
-  const slides = (heroConfig?.slides && heroConfig.slides.length > 0) ? heroConfig.slides : SLIDES;
+  const t = TRANSLATIONS[lang];
+  const defaultSlides = lang === 'en' ? SLIDES_EN : SLIDES_BN;
+  const slides = (heroConfig?.slides && heroConfig.slides.length > 0) ? heroConfig.slides : defaultSlides;
   const [currentSlide, setCurrentSlide] = useState(0);
 
   useEffect(() => {
@@ -126,13 +173,13 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
                   className="px-6 py-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs sm:text-sm shadow-lg shadow-rose-600/40 hover:shadow-rose-600/60 transform hover:-translate-y-0.5 transition-all flex items-center gap-2 cursor-pointer"
                 >
                   <ShoppingCart className="w-4 h-4" />
-                  <span>{slide.buttonText || 'এখনই অর্ডার করুন'}</span>
+                  <span>{slide.buttonText || t.heroOrderNow}</span>
                 </button>
                 <button
                   onClick={() => onSelectCategory(slide.category)}
-                  className="px-4 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white font-semibold text-xs sm:text-sm border border-white/20 backdrop-blur-sm transition-all flex items-center gap-1.5"
+                  className="px-4 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-white font-semibold text-xs sm:text-sm border border-white/20 backdrop-blur-sm transition-all flex items-center gap-1.5 cursor-pointer"
                 >
-                  <span>কালেকশন দেখুন</span>
+                  <span>{t.heroViewCollection}</span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
@@ -140,12 +187,12 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
               <p className="mt-4 text-[11px] text-slate-400 flex items-center justify-center md:justify-start gap-3">
                 <span className="flex items-center gap-1">
                   <Shield className="w-3.5 h-3.5 text-emerald-400" />
-                  ৭ দিনের রিপ্লেসমেন্ট
+                  {t.hero7DaysReplacement}
                 </span>
                 <span>•</span>
                 <span className="flex items-center gap-1">
                   <Truck className="w-3.5 h-3.5 text-amber-400" />
-                  ক্যাশ অন ডেলিভারি
+                  {t.heroCod}
                 </span>
               </p>
             </div>
@@ -165,15 +212,15 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
 
           {/* Slider Arrows */}
           <button
-            onClick={() => setCurrentSlide((prev) => (prev - 1 + SLIDES.length) % SLIDES.length)}
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/40 hover:bg-black/70 text-white flex items-center justify-center backdrop-blur-sm border border-white/10 transition-colors z-20"
+            onClick={() => setCurrentSlide((prev) => (prev - 1 + slides.length) % slides.length)}
+            className="absolute left-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/40 hover:bg-black/70 text-white flex items-center justify-center backdrop-blur-sm border border-white/10 transition-colors z-20 cursor-pointer"
             aria-label="Previous Slide"
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
           <button
-            onClick={() => setCurrentSlide((prev) => (prev + 1) % SLIDES.length)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/40 hover:bg-black/70 text-white flex items-center justify-center backdrop-blur-sm border border-white/10 transition-colors z-20"
+            onClick={() => setCurrentSlide((prev) => (prev + 1) % slides.length)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-black/40 hover:bg-black/70 text-white flex items-center justify-center backdrop-blur-sm border border-white/10 transition-colors z-20 cursor-pointer"
             aria-label="Next Slide"
           >
             <ChevronRight className="w-5 h-5" />
@@ -181,11 +228,11 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
 
           {/* Dots Indicator */}
           <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 z-20">
-            {SLIDES.map((_, idx) => (
+            {slides.map((_, idx) => (
               <button
                 key={idx}
                 onClick={() => setCurrentSlide(idx)}
-                className={`h-1.5 rounded-full transition-all ${
+                className={`h-1.5 rounded-full transition-all cursor-pointer ${
                   currentSlide === idx ? 'w-6 bg-rose-500' : 'w-2 bg-white/40'
                 }`}
                 aria-label={`Slide ${idx + 1}`}
@@ -204,14 +251,14 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
           >
             <div className="relative z-10">
               <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-white/20 text-white uppercase">
-                ফাস্ট চার্জিং
+                {lang === 'en' ? 'Fast Charging' : 'ফাস্ট চার্জিং'}
               </span>
               <h3 className="text-base sm:text-lg font-black mt-1">
-                ৬৫ ওয়াট GaN চার্জার
+                {t.heroGanTitle}
               </h3>
-              <p className="text-xs text-amber-100 mt-0.5">ল্যাপটপ ও ফোনে সুপার ফাস্ট স্পিড</p>
+              <p className="text-xs text-amber-100 mt-0.5">{t.heroGanSubtitle}</p>
               <p className="mt-2 text-sm font-black text-amber-950 bg-white/90 px-2.5 py-1 rounded-lg inline-block">
-                শুরু মাত্র ১৮৫০৳
+                {t.heroGanStarting}
               </p>
             </div>
             <div className="w-24 h-24 rounded-xl overflow-hidden shadow-md flex-shrink-0 border-2 border-white/20">
@@ -229,19 +276,19 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({
           >
             <div className="relative z-10">
               <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                ⚡ সুপার এক্সপ্রেস
+                {lang === 'en' ? '⚡ Super Express' : '⚡ সুপার এক্সপ্রেস'}
               </span>
               <h3 className="text-base sm:text-lg font-black mt-1">
-                ২৪ ঘণ্টার মধ্যে ডেলিভারি
+                {t.hero24hTitle}
               </h3>
-              <p className="text-xs text-slate-400 mt-0.5">ঢাকা সিটিতে দ্রুততম হোম ডেলিভারি</p>
+              <p className="text-xs text-slate-400 mt-0.5">{t.hero24hSubtitle}</p>
               <span className="mt-2 text-xs font-bold text-rose-400 flex items-center gap-1 group-hover:translate-x-1 transition-transform">
-                <span>সকল পণ্য দেখুন</span>
+                <span>{t.heroViewAll}</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </span>
             </div>
-            <div className="w-16 h-16 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 flex-shrink-0">
-              <Truck className="w-8 h-8" />
+            <div className="w-24 h-24 rounded-xl overflow-hidden shadow-md flex-shrink-0 border-2 border-white/10 bg-slate-800 flex items-center justify-center">
+              <Truck className="w-12 h-12 text-rose-500 group-hover:scale-110 transition-transform" />
             </div>
           </div>
 
